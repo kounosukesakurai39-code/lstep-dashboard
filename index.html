@@ -1,0 +1,1860 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lステップ登録者管理</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', sans-serif; background: #f6f7fa; color: #1f2b3d; min-height: 100vh; -webkit-font-smoothing: antialiased; }
+  h1 { text-align: center; font-size: 1.15em; font-weight: 700; margin-bottom: 6px; color: #163a5c; line-height: 1.3; }
+  .subtitle { text-align: center; color: #8494a8; margin-bottom: 20px; font-size: 0.75em; }
+
+  .app-layout { display: flex; align-items: flex-start; min-height: 100vh; }
+  .main-sidebar { width: 190px; min-width: 190px; flex-shrink: 0; background: #fff; border-right: 1px solid #e5eaf0; padding: 20px 14px; position: sticky; top: 0; height: 100vh; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; }
+  .main-sidebar h1, .main-sidebar .subtitle { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .app-main { flex: 1; min-width: 0; padding: 20px; }
+
+  .tab-row { display: flex; gap: 8px; max-width: 1000px; margin: 0 auto 20px; flex-wrap: wrap; }
+  .main-sidebar .tab-row { flex-direction: column; max-width: none; margin: 0; gap: 6px; }
+  .main-sidebar .tab, .main-sidebar .snap-nav-sub, .main-sidebar .snap-nav-item { text-align: left; border-radius: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; box-sizing: border-box; }
+  .tab { padding: 8px 20px; border-radius: 20px; border: 1px solid #d5dee8; background: #fff; color: #7088a0; cursor: pointer; font-size: 0.85em; }
+  .tab.active { background: #1a6090; color: #fff; border-color: #1a6090; }
+
+  .panel { max-width: 1000px; margin: 0 auto; display: none; }
+  #panel-snapshot, #panel-managers { max-width: none; }
+  .panel.active { display: block; }
+
+  .toolbar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .toolbar input, .toolbar select { flex: 1; min-width: 130px; padding: 8px 12px; background: #fff; border: 1px solid #d5dee8; border-radius: 8px; color: #2a3a50; font-size: 0.85em; outline: none; }
+  .btn { padding: 9px 18px; background: #14548a; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 0.85em; font-weight: 500; white-space: nowrap; transition: background .15s ease, transform .1s ease; box-shadow: 0 1px 2px rgba(16,24,40,0.06); }
+  .btn:hover { background: #1a6faf; }
+  .btn:active { transform: translateY(1px); }
+  .btn.green { background: #1f8a4c; }
+  .btn.green:hover { background: #279457; }
+  .btn.red { background: #fbe4e6; color: #c0304a; box-shadow: none; }
+  .btn.red:hover { background: #f6ccd1; }
+  .btn.gray { background: #eef1f5; color: #45566b; box-shadow: none; }
+
+  .count { color: #7088a0; font-size: 0.85em; margin-bottom: 10px; }
+
+  table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e5eaf0; border-radius: 10px; overflow: hidden; font-size: 0.85em; }
+  th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #e5eaf0; border-right: 1px solid #eef1f5; }
+  th:last-child, td:last-child { border-right: none; }
+  th { background: #eef3f8; color: #1a6090; font-size: 0.8em; }
+  tr:last-child td { border-bottom: none; }
+  tr.row:hover { background: #f2f7fb; cursor: pointer; }
+  .snap-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .editable-cell { cursor: pointer; border-radius: 4px; padding: 2px 5px; display: inline-block; transition: background .1s ease; }
+  .editable-cell:hover { background: #eaf2f9; outline: 1px dashed #8fb4d4; }
+  .cell-edit-input { width: 72px; text-align: right; font-size: 0.95em; padding: 2px 4px; border: 1px solid #14548a; border-radius: 4px; outline: none; box-shadow: 0 0 0 2px rgba(20,84,138,0.15); }
+  .delta-badge { display: inline-block; font-size: 0.74em; font-weight: 700; padding: 1px 6px; border-radius: 8px; margin-top: 3px; letter-spacing: 0.01em; white-space: nowrap; }
+  .delta-badge.delta-up { background: #e7f6ec; color: #1f8a4c; }
+  .delta-badge.delta-down { background: #fbe4e6; color: #c0304a; }
+  .delta-badge.delta-flat { background: #eef1f5; color: #7088a0; }
+  .snap-table tr:nth-child(even) { background: #fafbfd; }
+  .snap-table td.cat-label { font-weight: bold; color: #1a6090; background: #f4f7fa; }
+  .empty { text-align: center; color: #a0b0c0; padding: 40px 0; }
+  .loading { text-align: center; color: #7088a0; padding: 40px; }
+
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 0.78em; white-space: nowrap; }
+
+  .kpi-row { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+  .kpi-card { flex: 1; min-width: 140px; background: #fff; border: 1px solid #e5eaf0; border-radius: 10px; padding: 16px; text-align: center; }
+  .kpi-card .val { font-size: 1.6em; font-weight: bold; color: #1a6090; }
+  .kpi-card .label { font-size: 0.78em; color: #7088a0; margin-top: 4px; }
+
+  .chart-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+  .chart-box { background: #fff; border: 1px solid #e5eaf0; border-radius: 10px; padding: 16px; flex: 1; min-width: 300px; }
+  .chart-box h3 { font-size: 0.9em; color: #1a6090; margin-bottom: 12px; }
+  .chart-box.full { flex-basis: 100%; }
+
+  .csv-box { background: #fff; border: 1px solid #eef1f5; border-radius: 14px; padding: 22px 24px; margin-bottom: 18px; box-shadow: 0 1px 2px rgba(16,24,40,0.04), 0 1px 3px rgba(16,24,40,0.05); }
+  .csv-box h3 { color: #163a5c; font-weight: 600; font-size: 0.95em; margin-bottom: 10px; letter-spacing: 0.01em; }
+  .collapsible { padding: 0; }
+  .collapsible summary { list-style: none; cursor: pointer; padding: 14px 24px; color: #163a5c; font-weight: 600; font-size: 0.88em; letter-spacing: 0.01em; display: flex; align-items: center; gap: 8px; }
+  .collapsible summary::-webkit-details-marker { display: none; }
+  .collapsible summary::before { content: '▶'; font-size: 0.75em; color: #8494a8; transition: transform .15s ease; }
+  .collapsible[open] summary::before { transform: rotate(90deg); }
+  .collapsible summary:hover { background: #f7faff; }
+  .collapsible .collapsible-body { padding: 0 24px 20px; }
+  textarea { width: 100%; height: 120px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; color: #2a3a50; padding: 10px; font-size: 0.8em; font-family: 'SFMono-Regular', Menlo, monospace; transition: border-color .15s ease; }
+  textarea:focus { outline: none; border-color: #2a80b0; box-shadow: 0 0 0 3px rgba(42,128,176,0.12); }
+  .map-row { display: flex; align-items: center; gap: 10px; margin: 10px 0; font-size: 0.85em; }
+  .map-row label { min-width: 120px; color: #55677e; font-weight: 500; }
+  .map-row select { flex: 1; padding: 7px 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; color: #2a3a50; }
+  .preview-table { overflow-x: auto; margin-top: 10px; }
+  .preview-table table { font-size: 0.75em; }
+  .table-wrap { overflow-x: auto; }
+  .table-wrap table { white-space: nowrap; }
+
+  #snapshotBusinessTabs.tab-row { gap: 2px; border-bottom: 1px solid #e5eaf0; padding-bottom: 0; margin-bottom: 20px; }
+  #snapshotBusinessTabs .tab { border: none; border-radius: 0; background: transparent; color: #8494a8; font-weight: 500; padding: 10px 18px; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s ease, border-color .15s ease; }
+  #snapshotBusinessTabs .tab:hover { color: #163a5c; }
+  #snapshotBusinessTabs .tab.active { background: transparent; color: #14548a; border-bottom: 2px solid #14548a; }
+  .zentai-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 0.82em; color: #45566b; font-weight: 500; cursor: pointer; margin-bottom: 14px; }
+  .zentai-toggle input { accent-color: #14548a; cursor: pointer; }
+
+  .snap-layout { display: flex; gap: 20px; align-items: flex-start; }
+  .snap-sidebar { display: flex; flex-direction: column; gap: 2px; min-width: 190px; max-width: 190px; flex-shrink: 0; background: #fff; border: 1px solid #eef1f5; border-radius: 12px; padding: 8px; box-shadow: 0 1px 2px rgba(16,24,40,0.04); }
+  .snap-nav-item { text-align: left; padding: 9px 12px; border-radius: 7px; border: 1px solid transparent; background: transparent; color: #55677e; cursor: pointer; font-size: 0.85em; font-weight: 500; transition: background .12s ease, color .12s ease; }
+  .snap-nav-item:hover { background: #f4f7fb; color: #163a5c; }
+  .snap-nav-item.active { background: #eaf2f9; color: #14548a; border-color: transparent; box-shadow: inset 3px 0 0 #14548a; }
+  .snap-nav-sub { text-align: left; padding: 7px 12px 7px 22px; border-radius: 7px; border: none; background: transparent; color: #7c8ca0; cursor: pointer; font-size: 0.8em; margin-left: 6px; transition: background .12s ease, color .12s ease; }
+  .snap-nav-sub:hover { background: #f4f7fb; color: #163a5c; }
+  .snap-nav-sub.active { background: #14548a; color: #fff; }
+  .snap-main { flex: 1; min-width: 0; }
+  .snap-wrap { overflow: auto; max-height: calc(100vh - 40px); border: 1px solid #eef1f5; border-radius: 12px; box-shadow: 0 1px 2px rgba(16,24,40,0.04), 0 1px 3px rgba(16,24,40,0.05); }
+  .snap-wrap table { border: none; border-radius: 0; border-collapse: separate; border-spacing: 0; overflow: visible; font-size: 0.82em; table-layout: fixed; }
+  .snap-table th, .snap-table td { border-right: none; border-bottom: 1px solid #f0f2f6; }
+  .snap-table thead th { position: sticky; top: 0; z-index: 2; background: #fafbfd; color: #55677e; font-weight: 600; font-size: 0.76em; letter-spacing: 0.03em; border-bottom: 1px solid #e5eaf0; }
+  .snap-table thead th { width: 110px; }
+  .snap-table thead th.th-cat, .snap-table thead th.th-metric, .snap-table thead th.th-year, .snap-table thead th.th-all { z-index: 3; background: #fafbfd; }
+  .snap-table thead th.th-cat { left: 0; width: 170px; }
+  .snap-table thead th.th-metric { left: 170px; width: 130px; }
+  .snap-table thead th.th-year { left: 300px; width: 90px; }
+  .snap-table thead th.th-all { left: 390px; width: 90px; }
+  .snap-table thead th.period-th { top: 35.5px; width: 70px; }
+  .snap-table thead th.month-th { width: 280px; border-right: 2px solid #b9c6d6; }
+  .snap-table thead th.period-total-th { border-right: 2px solid #b9c6d6; }
+  .snap-table td.total-col { background: #f4f8fc; font-weight: 600; color: #14548a; border-right: 2px solid #b9c6d6; }
+  .snap-table tbody tr:hover td { background: #f7faff; }
+  .snap-table tr.group-start td, .snap-table tr.group-start th { border-top: 2px solid #b9c6d6; }
+  .snap-table tr.agg-row td { background: #f6f9fc; font-weight: 600; }
+  .snap-table tr.agg-row td.cat-label { color: #3a5a80; }
+  .snap-table tr.group-header-row { cursor: pointer; }
+  .snap-table tr.group-header-row td { background: #eef4f9 !important; font-weight: 600; color: #14548a; }
+  .snap-table tr.group-header-row:hover td { background: #e3edf6 !important; }
+  .snap-table td.group-header-cell { position: sticky; left: 0; z-index: 1; white-space: nowrap; }
+  .compare-toggle { font-size: 0.82em; font-weight: 500; color: #7088a0; background: #fff; border: 1px solid #d5dee8; border-radius: 12px; padding: 2px 10px; margin-left: 8px; cursor: pointer; display: inline-block; }
+  .compare-toggle:hover { color: #14548a; border-color: #8fb4d4; }
+  .compare-toggle.active { background: #14548a; color: #fff; border-color: #14548a; }
+  .snap-table tr.compare-label-row td { background: #f3f0fb !important; font-weight: 600; color: #6a4fa0; font-style: italic; }
+  .snap-table td.compare-label-cell { position: sticky; left: 0; z-index: 1; white-space: nowrap; }
+  .snap-table tr.compare-row td { background: #f8f6fc; }
+  .snap-table tr.compare-row td.cat-label { color: #6a4fa0; }
+  .snap-table td.cat-label { position: sticky; left: 0; z-index: 1; min-width: 170px; max-width: 170px; white-space: normal; font-weight: 600; color: #14548a; background: #f9fafc; }
+  .snap-table td.metric-label { position: sticky; left: 170px; z-index: 1; background: #fff; min-width: 130px; max-width: 130px; white-space: normal; color: #45566b; }
+  .snap-table td.year-total, .snap-table td.all-total { position: sticky; z-index: 1; background: #f4f8fc; font-weight: 600; color: #14548a; min-width: 90px; }
+  .snap-table td.year-total { left: 300px; border-right: 1px solid #e5eaf0; }
+  .snap-table td.all-total { left: 390px; border-right: 2px solid #b9c6d6; }
+  .snap-table tr:nth-child(even) td.metric-label { background: #fafbfd; }
+  .snap-table tr:nth-child(even) td.year-total, .snap-table tr:nth-child(even) td.all-total { background: #eef4f9; }
+  .snap-table tr:hover td.cat-label, .snap-table tr:hover td.metric-label, .snap-table tr:hover td.year-total, .snap-table tr:hover td.all-total { background: #f7faff; }
+
+  .settings-box { background: #fff; border: 1px solid #e5eaf0; border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+  .settings-box h3 { color: #1a6090; font-size: 0.95em; margin-bottom: 12px; }
+  .chip-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .chip-select { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip-toggle { background: #fff; border: 1px solid #d5dee8; border-radius: 16px; padding: 5px 12px; font-size: 0.8em; color: #55677e; cursor: pointer; transition: background .12s ease, color .12s ease, border-color .12s ease; }
+  .chip-toggle:hover { border-color: #8fb4d4; color: #14548a; }
+  .chip-toggle.active { background: #14548a; color: #fff; border-color: #14548a; }
+  .chip { background: #eef3f8; border: 1px solid #d5dee8; border-radius: 20px; padding: 5px 12px; font-size: 0.8em; display: flex; align-items: center; gap: 8px; }
+  .chip .x { color: #c0304a; cursor: pointer; font-weight: bold; }
+  .add-row { display: flex; gap: 8px; }
+  .add-row input { flex: 1; padding: 8px 12px; background: #f8fafc; border: 1px solid #d5dee8; border-radius: 8px; color: #2a3a50; }
+
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(20,30,45,0.5); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
+  .modal-overlay.show { display: flex; }
+  .modal { background: #fff; border: 1px solid #e5eaf0; border-radius: 12px; padding: 24px; max-width: 480px; width: 100%; max-height: 90vh; overflow-y: auto; }
+  .modal h2 { color: #1a6090; font-size: 1.1em; margin-bottom: 16px; }
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 0.8em; color: #3a5a80; margin-bottom: 4px; }
+  .field input, .field select, .field textarea { width: 100%; padding: 8px 12px; background: #f8fafc; border: 1px solid #d5dee8; border-radius: 8px; color: #2a3a50; font-size: 0.9em; outline: none; }
+  .field textarea { height: 60px; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 16px; }
+  .modal-actions .btn { flex: 1; }
+
+  .toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #1a6090; color: #fff; padding: 12px 28px; border-radius: 30px; font-size: 0.9em; opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 999; }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="app-layout">
+<nav class="main-sidebar">
+  <h1>📊 Lステップ<br>登録者管理</h1>
+  <p class="subtitle">友だち登録〜相談会予約〜成約までのファネル管理</p>
+
+  <div class="tab-row" id="tabRow">
+    <button class="tab" id="tabbtn-influencerGroup" onclick="toggleInfluencerGroup()">👤 インフルエンサー</button>
+    <span id="tabAnchor" style="display:none"></span>
+    <button class="tab" id="tabbtn-chart" onclick="showTab('chart')">📈 グラフ</button>
+    <button class="tab" id="tabbtn-csv" onclick="showTab('csv')">📥 CSV取込</button>
+    <button class="tab" id="tabbtn-snapshot" onclick="showTab('snapshot')">📅 月次集計</button>
+    <button class="tab" id="tabbtn-managers" onclick="showTab('managers')">👤 管理者別</button>
+    <button class="tab" id="tabbtn-settings" onclick="showTab('settings')">⚙️ 設定</button>
+  </div>
+</nav>
+<main class="app-main">
+
+<!-- 一覧（非表示・コードは温存） -->
+<div class="panel" id="panel-list">
+  <div class="toolbar">
+    <input type="text" id="search" placeholder="名前で検索..." oninput="renderList()">
+    <select id="filterStatus" onchange="renderList()"><option value="">状態: すべて</option></select>
+    <select id="filterSource" onchange="renderList()"><option value="">インフルエンサー: すべて</option></select>
+    <button class="btn green" onclick="openModal(null)">＋ 新規追加</button>
+    <button class="btn gray" onclick="reload()">🔄 更新</button>
+  </div>
+  <p class="count" id="countLabel"></p>
+  <div id="listArea"><p class="loading">読み込み中...</p></div>
+</div>
+
+<!-- インフルエンサー個別 -->
+<div class="panel" id="panel-influencer">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px">
+    <h2 id="influencerTitle" style="color:#1a6090;font-size:1.1em"></h2>
+    <button class="btn green" onclick="openModal(null)">＋ 新規追加</button>
+  </div>
+  <div class="kpi-row" id="influencerKpiRow"></div>
+  <div class="kpi-row" id="influencerKpiRow2"></div>
+  <div class="toolbar">
+    <input type="text" id="influencerSearchInput" placeholder="名前・LINE IDで検索" oninput="renderInfluencerFilteredList()">
+  </div>
+  <div class="chip-select" id="influencerStatusFilterChips" style="margin-bottom:14px"></div>
+  <p class="count" id="influencerCountLabel"></p>
+  <div id="influencerListArea"></div>
+</div>
+
+<!-- グラフ -->
+<div class="panel active" id="panel-chart">
+  <div class="tab-row" id="chartSourceTabs" style="margin:0 0 16px"></div>
+  <div class="kpi-row" id="kpiRow"></div>
+  <div class="chart-row">
+    <div class="chart-box full">
+      <h3>月別 新規登録推移</h3>
+      <canvas id="lineChart" height="90"></canvas>
+    </div>
+  </div>
+  <div class="chart-row">
+    <div class="chart-box" style="max-width:340px">
+      <h3>状態別 内訳</h3>
+      <canvas id="statusPie" height="240"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- CSV取込 -->
+<div class="panel" id="panel-csv">
+  <div class="csv-box">
+    <h3>Lステップからエクスポートした CSV を取り込む</h3>
+    <p style="font-size:0.8em;color:#4a7090;margin-bottom:10px">このCSVは誰のデータか選んでから取り込んでください。中の全員がそのインフルエンサーとして登録されます。既存レコードは LINE ID または 名前+登録日 で自動的に照合し、手入力した状態・渡韓日などの項目は上書きしません。</p>
+    <div class="field" style="margin-bottom:12px">
+      <label style="display:block;font-size:0.8em;color:#3a5a80;margin-bottom:4px">このCSVはどのインフルエンサーのデータですか？</label>
+      <select id="csvInfluencer"></select>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:0.82em;color:#3a5a80;margin-bottom:12px">
+      <input type="checkbox" id="csvIsFullList">
+      このCSVは現在の全員リストです（載っていない人は自動で「ブロック」にする）
+    </label>
+    <input type="file" id="csvFile" accept=".csv" onchange="handleCsvFile(this.files[0])" style="margin-bottom:10px">
+    <textarea id="csvText" placeholder="CSVの中身をここに貼り付けてもOKです"></textarea>
+    <div style="margin-top:10px"><button class="btn" onclick="parseCsv()">解析する</button></div>
+  </div>
+  <div id="csvMapArea"></div>
+</div>
+
+<!-- 月次集計 -->
+<div class="panel" id="panel-snapshot">
+  <div class="tab-row" id="snapshotBusinessTabs" style="margin:0 0 16px"></div>
+  <label class="zentai-toggle"><input type="checkbox" id="zentaiOnlyCheckbox" onchange="toggleZentaiOnly(this.checked)"> 全体のみ表示</label>
+  <div id="snapshotTableArea"></div>
+  <details class="csv-box collapsible">
+    <summary>Lステップのクロス分析CSVを取り込む</summary>
+    <div class="collapsible-body">
+    <p style="font-size:0.8em;color:#4a7090;margin-bottom:10px">「流入経路(大)ごと」のようなクロス分析レポートをCSVエクスポートしたものをそのまま取り込めます。1行目がカテゴリ、2行目以降が数値の表形式に対応しています。</p>
+    <div class="map-row"><label>事業</label><input type="text" id="snapCsvBusiness" list="snapBusinessList" placeholder="例: SARTO"></div>
+    <div class="map-row"><label>日付</label><input type="month" id="snapCsvDate"></div>
+    <input type="file" id="snapCsvFile" accept=".csv" onchange="handleSnapshotCsvFile(this.files[0])" style="margin-bottom:10px">
+    <textarea id="snapCsvText" placeholder="CSVの中身をここに貼り付けてもOKです"></textarea>
+    <div style="margin-top:10px"><button class="btn green" onclick="importSnapshotCsv()">取り込む</button></div>
+    <datalist id="snapBusinessList"></datalist>
+    </div>
+  </details>
+</div>
+
+<div class="panel" id="panel-managers">
+  <div id="managersArea"></div>
+</div>
+
+<!-- 設定 -->
+<div class="panel" id="panel-settings">
+  <div class="settings-box">
+    <h3>状態（ステータス）の選択肢</h3>
+    <div class="chip-list" id="statusChips"></div>
+    <div class="add-row">
+      <input type="text" id="newStatus" placeholder="新しい状態を追加...">
+      <button class="btn" onclick="addOption('statuses','newStatus')">追加</button>
+    </div>
+  </div>
+  <div class="settings-box">
+    <h3>インフルエンサーの選択肢</h3>
+    <div class="chip-list" id="sourceChips"></div>
+    <div class="add-row">
+      <input type="text" id="newSource" placeholder="新しいインフルエンサーを追加...">
+      <button class="btn" onclick="addOption('sources','newSource')">追加</button>
+    </div>
+  </div>
+  <div class="settings-box">
+    <h3>相談会予約先の選択肢</h3>
+    <div class="chip-list" id="venueChips"></div>
+    <div class="add-row">
+      <input type="text" id="newVenue" placeholder="新しい相談会予約先を追加...">
+      <button class="btn" onclick="addOption('venues','newVenue')">追加</button>
+    </div>
+  </div>
+  <div class="settings-box">
+    <h3>部位の選択肢（希望部位・手術部位で共通）</h3>
+    <div class="chip-list" id="areaChips"></div>
+    <div class="add-row">
+      <input type="text" id="newArea" placeholder="新しい部位を追加...">
+      <button class="btn" onclick="addOption('areas','newArea')">追加</button>
+    </div>
+  </div>
+</div>
+
+</main>
+</div>
+
+<!-- 編集モーダル -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h2 id="modalTitle">新規登録</h2>
+    <div class="field"><label>名前</label><input type="text" id="f_name"></div>
+    <div class="field"><label>状態</label><select id="f_status"></select></div>
+    <div class="field"><label>登録日</label><input type="date" id="f_registeredAt"></div>
+    <div class="field"><label>インフルエンサー</label><select id="f_source"></select></div>
+    <div class="field"><label>LINE ID</label><input type="text" id="f_lineId"></div>
+    <div class="field"><label>渡韓日</label><input type="date" id="f_travelDate"></div>
+    <div class="field"><label>相談会予約先</label><select id="f_consultationVenue"></select></div>
+    <div class="field"><label>場所</label><input type="text" id="f_location" placeholder="例: 名古屋"></div>
+    <div class="field"><label>希望部位</label><select id="f_desiredArea"></select></div>
+    <div class="field"><label>売上</label><input type="number" id="f_revenue" placeholder="例: 500000"></div>
+    <div class="field"><label>手術病院名</label><select id="f_surgeryVenue"></select></div>
+    <div class="field"><label>手術部位</label><div class="chip-select" id="f_surgeryArea"></div></div>
+    <div class="field"><label>手術年月</label><input type="month" id="f_surgeryMonth"></div>
+    <div class="field"><label>備考</label><textarea id="f_note"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn gray" onclick="closeModal()">閉じる</button>
+      <button class="btn red" id="deleteBtn" onclick="deleteCurrent()" style="display:none">削除</button>
+      <button class="btn green" onclick="saveCurrent()">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+var SUPABASE_URL = 'https://xzptkvciypgyygmhvhhs.supabase.co';
+var SUPABASE_ANON_KEY = 'sb_publishable_wAsepmixI4NC16C59B6kbA_RmxzoZ7H';
+var SUPABASE_TABLE_URL = SUPABASE_URL + '/rest/v1/app_data?id=eq.1';
+var SUPABASE_HEADERS = { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY };
+
+var DATA = { records: [], sources: [], statuses: [], venues: [], areas: [], nextId: 1, snapshots: [], nextSnapshotId: 1 };
+var currentSnapshotBusiness = null;
+var expandedGroups = {};
+var expandedAggDetails = {};
+var expandedPlatformDetails = {};
+var expandedCompareGroups = {};
+var showZentaiOnly = false;
+var SNAP_TAB_HIDDEN_BUSINESSES = ['SARTO'];
+var COMPARE_EXCLUDED_BUSINESSES = ['SNS増加数'];
+
+function toggleGroupExpand(g) {
+  expandedGroups[g] = !expandedGroups[g];
+  renderSnapshotTable();
+}
+
+function toggleZentaiOnly(checked) {
+  showZentaiOnly = checked;
+  renderSnapshotTable();
+}
+
+function toggleCompareGroup(g) {
+  expandedCompareGroups[g] = !expandedCompareGroups[g];
+  if (expandedCompareGroups[g]) expandedGroups[g] = true;
+  renderSnapshotTable();
+}
+
+function toggleAggDetail(g) {
+  expandedAggDetails[g] = !expandedAggDetails[g];
+  renderSnapshotTable();
+}
+
+function togglePlatformDetail(key) {
+  expandedPlatformDetails[key] = !expandedPlatformDetails[key];
+  renderSnapshotTable();
+}
+var currentManagerPerson = null;
+var currentManagerCategory = null;
+var currentManagerPlatforms = [];
+var editingId = null;
+var currentSurgeryAreas = [];
+var influencerStatusFilters = [];
+var currentInfluencer = null;
+
+function renderSurgeryAreaPicker() {
+  var el = document.getElementById('f_surgeryArea');
+  if (!el) return;
+  el.innerHTML = DATA.areas.map(function(a) {
+    var active = currentSurgeryAreas.indexOf(a) >= 0;
+    var arg = a.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return '<button type="button" class="chip-toggle' + (active ? ' active' : '') + '" onclick="toggleSurgeryArea(\'' + arg + '\')">' + esc(a) + '</button>';
+  }).join('');
+}
+
+function toggleSurgeryArea(area) {
+  var idx = currentSurgeryAreas.indexOf(area);
+  if (idx >= 0) currentSurgeryAreas.splice(idx, 1);
+  else currentSurgeryAreas.push(area);
+  renderSurgeryAreaPicker();
+}
+
+function formatAreaList(val) {
+  if (Array.isArray(val)) return val.join('、');
+  return val || '';
+}
+var lineChartInstance = null, statusPieInstance = null;
+var chartFilterSource = '';
+var csvParsed = null; // { headers, rows }
+
+var STATUS_COLORS = ['#4a7090', '#3a6ea5', '#e6a23c', '#9b6bd1', '#27ae60', '#e74c3c', '#60c0f0', '#e94560'];
+var STATUS_NEUTRAL_COLOR = '#94a3b8';
+var STATUS_PROGRESS_COLORS = ['#3b82f6', '#f59e0b', '#8b5cf6', '#06b6d4', '#22c55e', '#ef4444', '#ec4899'];
+
+function esc(str) {
+  return String(str == null ? '' : str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function toast(msg) {
+  var el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(function() { el.classList.remove('show'); }, 2500);
+}
+
+var influencerGroupOpen = false;
+
+function showTab(id) {
+  influencerGroupOpen = false;
+  document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
+  document.getElementById('panel-' + id).classList.add('active');
+  document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+  var btn = document.getElementById('tabbtn-' + id);
+  if (btn) btn.classList.add('active');
+  renderInfluencerTabs();
+  if (id === 'chart') renderCharts();
+  if (id === 'settings') renderSettings();
+  if (id === 'snapshot') renderSnapshotTab();
+  if (id === 'managers') renderManagersTab();
+}
+
+function toggleInfluencerGroup() {
+  influencerGroupOpen = true;
+  document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
+  document.getElementById('panel-influencer').classList.add('active');
+  document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+  document.getElementById('tabbtn-influencerGroup').classList.add('active');
+  renderInfluencerTabs();
+  if (!currentInfluencer && DATA.sources.length) currentInfluencer = DATA.sources[0];
+  if (currentInfluencer) renderInfluencerPanel();
+}
+
+function renderInfluencerTabs() {
+  document.querySelectorAll('.tab-influencer').forEach(function(el) { el.remove(); });
+  if (!influencerGroupOpen) return;
+  var anchor = document.getElementById('tabbtn-influencerGroup');
+  DATA.sources.forEach(function(name) {
+    var btn = document.createElement('button');
+    btn.className = 'snap-nav-sub tab-influencer' + (currentInfluencer === name ? ' active' : '');
+    btn.textContent = name;
+    btn.onclick = function() { showInfluencerTab(name); };
+    anchor.insertAdjacentElement('afterend', btn);
+    anchor = btn;
+  });
+}
+
+function showInfluencerTab(name) {
+  currentInfluencer = name;
+  influencerGroupOpen = true;
+  document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
+  document.getElementById('panel-influencer').classList.add('active');
+  document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+  document.getElementById('tabbtn-influencerGroup').classList.add('active');
+  renderInfluencerTabs();
+  renderInfluencerPanel();
+}
+
+function renderInfluencerPanel() {
+  var name = currentInfluencer;
+  document.getElementById('influencerTitle').textContent = '👤 ' + name + ' の登録者';
+
+  var list = DATA.records.filter(function(r) { return r.source === name; });
+  var total = list.filter(function(r) { return r.status !== 'ブロック'; }).length;
+  var booked = list.filter(function(r) { return isBookedStatus(r.status); }).length;
+  var closed = list.filter(function(r) { return isClosedStatus(r.status); }).length;
+  var traveled = list.filter(function(r) { return isTravelStatus(r.status); }).length;
+  var totalRevenue = list.reduce(function(sum, r) { return sum + (Number(r.revenue) || 0); }, 0);
+
+  document.getElementById('influencerKpiRow').innerHTML =
+    kpiCard(total, '総登録数') +
+    kpiCard(booked, '相談会予約数') +
+    kpiCard(total ? Math.round(booked/total*100) + '%' : '-', '予約率') +
+    kpiCard(closed, '成約数') +
+    kpiCard(total ? Math.round(closed/total*100) + '%' : '-', '成約率');
+  document.getElementById('influencerKpiRow2').innerHTML =
+    kpiCard(total ? Math.round(traveled/total*100) + '%' : '-', '渡韓率') +
+    kpiCard(traveled, '渡韓数') +
+    kpiCard(formatRevenue(totalRevenue) || '0円', '売上合計');
+
+  document.getElementById('influencerSearchInput').value = '';
+  renderInfluencerStatusChips();
+  renderInfluencerList(list);
+}
+
+function renderInfluencerStatusChips() {
+  var el = document.getElementById('influencerStatusFilterChips');
+  if (!el) return;
+  influencerStatusFilters = influencerStatusFilters.filter(function(s) { return DATA.statuses.indexOf(s) >= 0; });
+  el.innerHTML = DATA.statuses.map(function(s) {
+    var active = influencerStatusFilters.indexOf(s) >= 0;
+    var arg = s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return '<button type="button" class="chip-toggle' + (active ? ' active' : '') + '" onclick="toggleInfluencerStatusFilter(\'' + arg + '\')">' + esc(s) + '</button>';
+  }).join('');
+}
+
+function toggleInfluencerStatusFilter(status) {
+  var idx = influencerStatusFilters.indexOf(status);
+  if (idx >= 0) influencerStatusFilters.splice(idx, 1);
+  else influencerStatusFilters.push(status);
+  renderInfluencerStatusChips();
+  renderInfluencerFilteredList();
+}
+
+function renderInfluencerFilteredList() {
+  var list = DATA.records.filter(function(r) { return r.source === currentInfluencer; });
+  renderInfluencerList(list);
+}
+
+function renderInfluencerList(list) {
+  var searchVal = (document.getElementById('influencerSearchInput').value || '').trim().toLowerCase();
+  var filtered = list.filter(function(r) {
+    if (influencerStatusFilters.length && influencerStatusFilters.indexOf(r.status) < 0) return false;
+    if (searchVal) {
+      var hay = ((r.name || '') + ' ' + (r.lineId || '')).toLowerCase();
+      if (hay.indexOf(searchVal) < 0) return false;
+    }
+    return true;
+  });
+  filtered.sort(function(a, b) { return (b.registeredAt||'').localeCompare(a.registeredAt||''); });
+  document.getElementById('influencerCountLabel').textContent = filtered.length + ' 件（全 ' + list.length + ' 件）';
+  document.getElementById('influencerListArea').innerHTML = buildTableHtml(filtered);
+}
+
+function reload() {
+  document.getElementById('listArea').innerHTML = '<p class="loading">読み込み中...</p>';
+  fetch(SUPABASE_TABLE_URL + '&select=data', { headers: SUPABASE_HEADERS })
+    .then(function(r) { return r.json(); })
+    .then(function(rows) {
+      var rec = (rows[0] && rows[0].data) || {};
+      DATA.records = Array.isArray(rec.records) ? rec.records : [];
+      DATA.sources = Array.isArray(rec.sources) ? rec.sources : ['未設定'];
+      DATA.statuses = Array.isArray(rec.statuses) ? rec.statuses : ['【未】アンケ', '【未】カウンセ', 'カウンセまち', '【済】カウンセ', '交渉中', '渡韓前', '成約確定', '渡韓中', 'ダウンタイム中（帰国後）', 'リピーター', '不成立', 'ブロック'];
+      DATA.venues = Array.isArray(rec.venues) ? rec.venues : ['DA', 'ドリーム', 'NOTE', '345', '現代美学', '現地相談'];
+      DATA.areas = Array.isArray(rec.areas) ? rec.areas : ['輪郭両顎', '鼻', '目', 'リフト', '豊胸', 'その他'];
+      DATA.nextId = rec.nextId || (DATA.records.length + 1);
+      DATA.snapshots = Array.isArray(rec.snapshots) ? rec.snapshots : [];
+      DATA.nextSnapshotId = rec.nextSnapshotId || (DATA.snapshots.length + 1);
+      populateFilters();
+      renderList();
+      showTab('chart');
+    })
+    .catch(function() { toast('❌ 読み込みエラー'); document.getElementById('listArea').innerHTML = '<p class="empty">読み込みに失敗しました</p>'; });
+}
+
+function compactRecord(r) {
+  var out = {};
+  for (var k in r) {
+    var v = r[k];
+    if (v !== '' && v !== null && v !== undefined) out[k] = v;
+  }
+  return out;
+}
+
+function save(successMsg) {
+  var payload = Object.assign({}, DATA, { records: DATA.records.map(compactRecord) });
+  return fetch(SUPABASE_TABLE_URL, {
+    method: 'PATCH',
+    headers: Object.assign({ 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }, SUPABASE_HEADERS),
+    body: JSON.stringify({ data: payload })
+  }).then(function(res) {
+    if (!res.ok) {
+      return res.json().catch(function() { return {}; }).then(function(body) {
+        throw new Error(body.message || ('HTTP ' + res.status));
+      });
+    }
+    if (successMsg) toast(successMsg);
+  }).catch(function(err) {
+    toast('❌ 保存に失敗しました: ' + (err && err.message ? err.message : '不明なエラー'));
+    throw err;
+  });
+}
+
+function populateFilters() {
+  var fs = document.getElementById('filterStatus');
+  var fsrc = document.getElementById('filterSource');
+  fs.innerHTML = '<option value="">状態: すべて</option>' + DATA.statuses.map(function(s) { return '<option value="'+esc(s)+'">'+esc(s)+'</option>'; }).join('');
+  fsrc.innerHTML = '<option value="">インフルエンサー: すべて</option>' + DATA.sources.map(function(s) { return '<option value="'+esc(s)+'">'+esc(s)+'</option>'; }).join('');
+  renderInfluencerTabs();
+
+  var csvSel = document.getElementById('csvInfluencer');
+  var prev = csvSel.value;
+  csvSel.innerHTML = '<option value="">-- 選択してください --</option>' + DATA.sources.map(function(s) { return '<option value="'+esc(s)+'">'+esc(s)+'</option>'; }).join('');
+  if (prev && DATA.sources.indexOf(prev) >= 0) csvSel.value = prev;
+}
+
+function statusColor(status) {
+  var idx = DATA.statuses.indexOf(status);
+  if (idx <= 0) return STATUS_NEUTRAL_COLOR;
+  return STATUS_PROGRESS_COLORS[(idx - 1) % STATUS_PROGRESS_COLORS.length];
+}
+
+function isTravelStatus(status) {
+  return status === '渡韓中' || status === 'ダウンタイム中（帰国後）' || status === 'リピーター' || status === 'リピーター候補';
+}
+
+function isClosedStatus(status) {
+  return status === '成約確定' || status === '渡韓前' || status === '交渉中' || isTravelStatus(status);
+}
+
+function isBookedStatus(status) {
+  return status === 'カウンセまち' || status === '【済】カウンセ' || isClosedStatus(status);
+}
+
+function renderList() {
+  var search = (document.getElementById('search').value || '').trim().toLowerCase();
+  var fStatus = document.getElementById('filterStatus').value;
+  var fSource = document.getElementById('filterSource').value;
+
+  var list = DATA.records.slice();
+  if (search) list = list.filter(function(r) { return (r.name||'').toLowerCase().indexOf(search) >= 0; });
+  if (fStatus) list = list.filter(function(r) { return r.status === fStatus; });
+  if (fSource) list = list.filter(function(r) { return r.source === fSource; });
+  list.sort(function(a, b) { return (b.registeredAt||'').localeCompare(a.registeredAt||''); });
+
+  document.getElementById('countLabel').textContent = list.length + ' 件（全 ' + DATA.records.length + ' 件）';
+  document.getElementById('listArea').innerHTML = buildTableHtml(list);
+}
+
+function formatRevenue(revenue) {
+  if (!revenue) return '';
+  var n = Number(revenue);
+  return isNaN(n) ? esc(revenue) : n.toLocaleString('ja-JP') + '円';
+}
+
+function formatMonth(ym) {
+  if (!ym) return '';
+  var parts = ym.split('-');
+  if (parts.length < 2) return ym;
+  return parts[0] + '年' + parseInt(parts[1], 10) + '月';
+}
+
+function formatDelta(diff, pct) {
+  var sign = diff > 0 ? '+' : '';
+  var cls = diff > 0 ? 'delta-up' : (diff < 0 ? 'delta-down' : 'delta-flat');
+  var arrow = diff > 0 ? '▲' : (diff < 0 ? '▼' : '－');
+  var pctHtml = pct !== null ? ' (' + sign + pct + '%)' : '';
+  return '<br><span class="delta-badge ' + cls + '">' + arrow + ' ' + sign + diff.toLocaleString('ja-JP') + pctHtml + '</span>';
+}
+
+function buildTableHtml(list) {
+  if (list.length === 0) return '<p class="empty">データがありません</p>';
+
+  var rows = list.map(function(r) {
+    var month = (r.registeredAt || '').slice(0, 7);
+    return '<tr class="row" onclick="openModal(' + r.id + ')">' +
+      '<td>' + esc(r.lineId || ('#' + r.id)) + '</td>' +
+      '<td><span class="badge" style="background:' + statusColor(r.status) + '22;color:' + statusColor(r.status) + '">' + esc(r.status) + '</span></td>' +
+      '<td>' + esc(r.name) + '</td>' +
+      '<td>' + esc(formatMonth(month)) + '</td>' +
+      '<td>' + esc(r.desiredArea) + '</td>' +
+      '<td>' + esc(r.consultationVenue) + '</td>' +
+      '<td>' + formatRevenue(r.revenue) + '</td>' +
+      '<td>' + esc(r.surgeryVenue) + '</td>' +
+      '<td>' + esc(formatAreaList(r.surgeryArea)) + '</td>' +
+      '<td>' + esc(r.surgeryMonth) + '</td>' +
+      '</tr>';
+  }).join('');
+
+  return '<div class="table-wrap"><table><thead><tr><th>ID</th><th>状態</th><th>名前</th><th>登録月</th><th>希望部位</th><th>相談会予約先</th><th>売上</th><th>手術病院名</th><th>手術部位</th><th>手術年月</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+
+function buildOptionsHtml(options, currentValue, emptyLabel) {
+  var opts = options.slice();
+  if (currentValue && opts.indexOf(currentValue) < 0) opts.unshift(currentValue);
+  var html = '<option value="">' + esc(emptyLabel) + '</option>';
+  html += opts.map(function(v) { return '<option value="'+esc(v)+'">'+esc(v)+'</option>'; }).join('');
+  return html;
+}
+
+function openModal(id) {
+  editingId = id;
+  var r = id ? DATA.records.find(function(x) { return x.id === id; }) : null;
+
+  document.getElementById('modalTitle').textContent = r ? ('編集: #' + r.id) : '新規登録';
+  document.getElementById('deleteBtn').style.display = r ? 'inline-block' : 'none';
+
+  var statusSel = document.getElementById('f_status');
+  statusSel.innerHTML = DATA.statuses.map(function(s) { return '<option value="'+esc(s)+'">'+esc(s)+'</option>'; }).join('');
+  var sourceSel = document.getElementById('f_source');
+  sourceSel.innerHTML = DATA.sources.map(function(s) { return '<option value="'+esc(s)+'">'+esc(s)+'</option>'; }).join('');
+
+  var venue = r ? r.consultationVenue || '' : '';
+  document.getElementById('f_consultationVenue').innerHTML = buildOptionsHtml(DATA.venues, venue, '（未定）');
+
+  var surgeryVenue = r ? r.surgeryVenue || '' : '';
+  document.getElementById('f_surgeryVenue').innerHTML = buildOptionsHtml(DATA.venues, surgeryVenue, '（未定）');
+
+  var desiredArea = r ? r.desiredArea || '' : '';
+  document.getElementById('f_desiredArea').innerHTML = buildOptionsHtml(DATA.areas, desiredArea, '（未定）');
+
+  var surgeryAreaVal = r ? r.surgeryArea : null;
+  currentSurgeryAreas = Array.isArray(surgeryAreaVal) ? surgeryAreaVal.slice() : (surgeryAreaVal ? [surgeryAreaVal] : []);
+  renderSurgeryAreaPicker();
+
+  document.getElementById('f_name').value = r ? r.name || '' : '';
+  document.getElementById('f_status').value = r ? r.status || DATA.statuses[0] : DATA.statuses[0];
+  document.getElementById('f_registeredAt').value = r ? r.registeredAt || '' : new Date().toISOString().slice(0,10);
+  document.getElementById('f_source').value = r ? r.source || DATA.sources[0] : (currentInfluencer || DATA.sources[0]);
+  document.getElementById('f_lineId').value = r ? r.lineId || '' : '';
+  document.getElementById('f_travelDate').value = r ? r.travelDate || '' : '';
+  document.getElementById('f_consultationVenue').value = venue;
+  document.getElementById('f_location').value = r ? r.location || '' : '';
+  document.getElementById('f_desiredArea').value = desiredArea;
+  document.getElementById('f_revenue').value = r ? r.revenue || '' : '';
+  document.getElementById('f_surgeryVenue').value = surgeryVenue;
+  document.getElementById('f_surgeryMonth').value = r ? r.surgeryMonth || '' : '';
+  document.getElementById('f_note').value = r ? r.note || '' : '';
+
+  document.getElementById('modalOverlay').classList.add('show');
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('show');
+  editingId = null;
+}
+
+function saveCurrent() {
+  var name = document.getElementById('f_name').value.trim();
+  if (!name) { toast('⚠️ 名前を入力してください'); return; }
+
+  var payload = {
+    name: name,
+    status: document.getElementById('f_status').value,
+    registeredAt: document.getElementById('f_registeredAt').value,
+    source: document.getElementById('f_source').value,
+    lineId: document.getElementById('f_lineId').value.trim(),
+    travelDate: document.getElementById('f_travelDate').value,
+    consultationVenue: document.getElementById('f_consultationVenue').value.trim(),
+    location: document.getElementById('f_location').value.trim(),
+    desiredArea: document.getElementById('f_desiredArea').value,
+    revenue: document.getElementById('f_revenue').value.trim(),
+    surgeryVenue: document.getElementById('f_surgeryVenue').value,
+    surgeryArea: currentSurgeryAreas.slice(),
+    surgeryMonth: document.getElementById('f_surgeryMonth').value,
+    note: document.getElementById('f_note').value.trim(),
+    updatedAt: new Date().toISOString()
+  };
+
+  if (editingId) {
+    var idx = DATA.records.findIndex(function(x) { return x.id === editingId; });
+    if (idx >= 0) DATA.records[idx] = Object.assign({}, DATA.records[idx], payload);
+  } else {
+    payload.id = DATA.nextId++;
+    DATA.records.push(payload);
+  }
+
+  save('✅ 保存しました').then(function() {
+    closeModal();
+    refreshCurrentView();
+  });
+}
+
+function deleteCurrent() {
+  if (!editingId) return;
+  if (!confirm('この登録者を削除しますか？')) return;
+  DATA.records = DATA.records.filter(function(x) { return x.id !== editingId; });
+  save('🗑️ 削除しました').then(function() {
+    closeModal();
+    refreshCurrentView();
+  });
+}
+
+function refreshCurrentView() {
+  if (document.getElementById('panel-influencer').classList.contains('active')) {
+    renderInfluencerPanel();
+  } else {
+    renderList();
+  }
+}
+
+// ── グラフ ──────────────────────────────────────────
+function renderChartSourceTabs() {
+  var el = document.getElementById('chartSourceTabs');
+  var options = [''].concat(DATA.sources);
+  el.innerHTML = options.map(function(s) {
+    var active = s === chartFilterSource ? ' active' : '';
+    var arg = s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return '<button class="tab' + active + '" onclick="setChartFilterSource(\'' + arg + '\')">' + esc(s || '全体') + '</button>';
+  }).join('');
+}
+
+function setChartFilterSource(source) {
+  chartFilterSource = source;
+  renderCharts();
+}
+
+function renderCharts() {
+  renderChartSourceTabs();
+  var records = chartFilterSource ? DATA.records.filter(function(r) { return r.source === chartFilterSource; }) : DATA.records;
+
+  var total = records.filter(function(r) { return r.status !== 'ブロック'; }).length;
+  var byStatus = {};
+  DATA.statuses.forEach(function(s) { byStatus[s] = 0; });
+  records.forEach(function(r) { byStatus[r.status] = (byStatus[r.status] || 0) + 1; });
+
+  var booked = records.filter(function(r) { return isBookedStatus(r.status); }).length;
+  var closed = records.filter(function(r) { return isClosedStatus(r.status); }).length;
+  var traveled = records.filter(function(r) { return isTravelStatus(r.status); }).length;
+  var totalRevenue = records.reduce(function(sum, r) { return sum + (Number(r.revenue) || 0); }, 0);
+
+  document.getElementById('kpiRow').innerHTML =
+    kpiCard(total, '総登録数') +
+    kpiCard(booked, '相談会予約数') +
+    kpiCard(total ? Math.round(booked/total*100) + '%' : '-', '予約率') +
+    kpiCard(closed, '成約数') +
+    kpiCard(total ? Math.round(closed/total*100) + '%' : '-', '成約率') +
+    kpiCard(traveled, '渡韓数') +
+    kpiCard(total ? Math.round(traveled/total*100) + '%' : '-', '渡韓率') +
+    kpiCard(formatRevenue(totalRevenue) || '0円', '売上合計');
+
+  // 月別推移
+  var byMonth = {};
+  records.forEach(function(r) {
+    var m = (r.registeredAt || '').slice(0, 7);
+    if (!m) return;
+    byMonth[m] = (byMonth[m] || 0) + 1;
+  });
+  var months = Object.keys(byMonth).sort();
+
+  if (lineChartInstance) lineChartInstance.destroy();
+  lineChartInstance = new Chart(document.getElementById('lineChart'), {
+    type: 'line',
+    data: {
+      labels: months,
+      datasets: [{ label: '新規登録数', data: months.map(function(m) { return byMonth[m]; }), borderColor: '#60c0f0', backgroundColor: '#60c0f033', tension: 0.3, fill: true }]
+    },
+    options: { plugins: { legend: { labels: { color: '#2a3a50' } } }, scales: { x: { ticks: { color: '#7088a0' }, grid: { color: '#eef0f4' } }, y: { ticks: { color: '#7088a0' }, grid: { color: '#eef0f4' }, beginAtZero: true } } }
+  });
+
+  // 状態別円グラフ
+  var statusLabels = DATA.statuses.filter(function(s) { return byStatus[s] > 0; });
+  if (statusPieInstance) statusPieInstance.destroy();
+  statusPieInstance = new Chart(document.getElementById('statusPie'), {
+    type: 'pie',
+    data: { labels: statusLabels, datasets: [{ data: statusLabels.map(function(s) { return byStatus[s]; }), backgroundColor: statusLabels.map(function(s) { return statusColor(s); }) }] },
+    options: { plugins: { legend: { position: 'bottom', labels: { color: '#2a3a50', boxWidth: 12, font: { size: 11 } } } } }
+  });
+}
+
+function kpiCard(val, label) {
+  return '<div class="kpi-card"><div class="val">' + val + '</div><div class="label">' + label + '</div></div>';
+}
+
+// ── CSV取込 ──────────────────────────────────────────
+function handleCsvFile(file) {
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var buf = e.target.result;
+    var text;
+    try {
+      text = new TextDecoder('utf-8', { fatal: true }).decode(buf);
+    } catch (err) {
+      text = new TextDecoder('shift_jis').decode(buf);
+    }
+    document.getElementById('csvText').value = text;
+    parseCsv();
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function parseCsvLine(line) {
+  var result = [];
+  var cur = '';
+  var inQuotes = false;
+  for (var i = 0; i < line.length; i++) {
+    var ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (line[i+1] === '"') { cur += '"'; i++; } else { inQuotes = false; }
+      } else { cur += ch; }
+    } else {
+      if (ch === '"') inQuotes = true;
+      else if (ch === ',') { result.push(cur); cur = ''; }
+      else cur += ch;
+    }
+  }
+  result.push(cur);
+  return result;
+}
+
+function parseCsv() {
+  var text = document.getElementById('csvText').value.trim();
+  if (!text) { toast('⚠️ CSVを選択するか貼り付けてください'); return; }
+  var lines = text.split(/\r\n|\n|\r/).filter(function(l) { return l.trim() !== ''; });
+  if (lines.length < 2) { toast('⚠️ データ行が見つかりません'); return; }
+
+  var headers = parseCsvLine(lines[0]);
+  var rows = lines.slice(1).map(parseCsvLine);
+
+  // Lステップの「友だち情報」等のエクスポートは1行目が内部ID（タグ_xxxx／友だち情報_xxxx）で
+  // 実際の項目名が2行目に入っていることがあるため、その場合はヘッダーを1行ずらす
+  var looksLikeInternalIds = headers.some(function(h) { return /^(タグ|友だち情報)_\d+$/.test(h.trim()); });
+  if (looksLikeInternalIds && rows.length > 0) {
+    headers = rows[0];
+    rows = rows.slice(1);
+  }
+
+  var areaTagColumns = [];
+  headers.forEach(function(h, i) {
+    var m = h.match(/部位[_－-](.+)$/);
+    if (m) areaTagColumns.push({ index: i, label: m[1].trim() });
+  });
+
+  csvParsed = { headers: headers, rows: rows, areaTagColumns: areaTagColumns };
+  renderCsvMap();
+}
+
+function guessColumn(headers, keywords) {
+  for (var i = 0; i < headers.length; i++) {
+    var h = headers[i];
+    for (var j = 0; j < keywords.length; j++) {
+      if (h.indexOf(keywords[j]) >= 0) return i;
+    }
+  }
+  return -1;
+}
+
+function renderCsvMap() {
+  var headers = csvParsed.headers;
+  var opts = '<option value="-1">（マッピングしない）</option>' + headers.map(function(h, i) { return '<option value="'+i+'">'+esc(h)+'</option>'; }).join('');
+
+  var guesses = {
+    name: guessColumn(headers, ['名前', 'お名前', 'ニックネーム', '表示名']),
+    registeredAt: guessColumn(headers, ['登録日', '追加日', '友だち追加', '日時']),
+    status: guessColumn(headers, ['対応マーク', 'マーク', '状態', 'ステータス', 'タグ']),
+    lineId: guessColumn(headers, ['LINE ID', 'UID', 'ユーザーID', 'ID']),
+    consultationVenue: guessColumn(headers, ['希望のカウンセリング会', 'カウンセリング会'])
+  };
+
+  var fields = [
+    ['name', '名前'], ['registeredAt', '登録日'], ['status', '状態'], ['lineId', 'LINE ID（照合キー）'],
+    ['consultationVenue', '相談会予約先（カウンセリング会）']
+  ];
+
+  var html = '<div class="csv-box"><h3>列のマッピング</h3>';
+  fields.forEach(function(f) {
+    html += '<div class="map-row"><label>' + f[1] + '</label><select id="map_' + f[0] + '">' + opts + '</select></div>';
+  });
+  if (csvParsed.areaTagColumns && csvParsed.areaTagColumns.length > 0) {
+    var areaLabels = csvParsed.areaTagColumns.map(function(c) { return c.label; }).join('、');
+    html += '<p style="font-size:0.8em;color:#1f8a4c;margin-top:10px">✓ 希望部位のタグ列を自動検出しました（' + esc(areaLabels) + '）。1が立っている部位を「希望部位」としてまとめて取り込みます。</p>';
+  }
+  html += '<div style="margin-top:10px"><button class="btn green" onclick="importCsv()">この内容で取り込む</button></div>';
+  html += '<div class="preview-table"><table><thead><tr>' + headers.map(function(h) { return '<th>'+esc(h)+'</th>'; }).join('') + '</tr></thead><tbody>' +
+    csvParsed.rows.slice(0, 5).map(function(row) { return '<tr>' + row.map(function(c) { return '<td>'+esc(c)+'</td>'; }).join('') + '</tr>'; }).join('') +
+    '</tbody></table></div>';
+  html += '<p style="font-size:0.78em;color:#4a7090;margin-top:8px">全' + csvParsed.rows.length + '行を検出（プレビューは先頭5行）</p>';
+  html += '</div>';
+
+  document.getElementById('csvMapArea').innerHTML = html;
+
+  fields.forEach(function(f) {
+    var sel = document.getElementById('map_' + f[0]);
+    if (guesses[f.name] !== undefined) {}
+  });
+  document.getElementById('map_name').value = guesses.name;
+  document.getElementById('map_registeredAt').value = guesses.registeredAt;
+  document.getElementById('map_status').value = guesses.status;
+  document.getElementById('map_lineId').value = guesses.lineId;
+  document.getElementById('map_consultationVenue').value = guesses.consultationVenue;
+}
+
+function normalizeDate(str) {
+  if (!str) return '';
+  var m = str.match(/(\d{4})[\/\-年](\d{1,2})[\/\-月](\d{1,2})/);
+  if (m) return m[1] + '-' + ('0'+m[2]).slice(-2) + '-' + ('0'+m[3]).slice(-2);
+  m = str.match(/^(\d{4})(\d{2})(\d{2})/);
+  if (m) return m[1] + '-' + m[2] + '-' + m[3];
+  return str.slice(0, 10);
+}
+
+function extractVenueFromSession(text) {
+  if (!text) return '';
+  for (var i = 0; i < DATA.venues.length; i++) {
+    if (DATA.venues[i] && text.indexOf(DATA.venues[i]) >= 0) return DATA.venues[i];
+  }
+  var m = text.match(/】(.+?)カウンセリング会/);
+  return m ? m[1].trim() : '';
+}
+
+function importCsv() {
+  var influencer = document.getElementById('csvInfluencer').value;
+  if (!influencer) { toast('⚠️ インフルエンサーを選択してください'); return; }
+
+  var iName = parseInt(document.getElementById('map_name').value, 10);
+  var iDate = parseInt(document.getElementById('map_registeredAt').value, 10);
+  var iStatus = parseInt(document.getElementById('map_status').value, 10);
+  var iLineId = parseInt(document.getElementById('map_lineId').value, 10);
+  var iVenue = parseInt(document.getElementById('map_consultationVenue').value, 10);
+
+  if (iName < 0) { toast('⚠️ 名前の列を選んでください'); return; }
+
+  var isFullList = document.getElementById('csvIsFullList').checked;
+  if (isFullList && iLineId < 0) { toast('⚠️ 全員リスト機能を使うにはLINE IDの列を選んでください'); return; }
+
+  var areaTagColumns = csvParsed.areaTagColumns || [];
+  areaTagColumns.forEach(function(c) {
+    if (DATA.areas.indexOf(c.label) < 0) DATA.areas.push(c.label);
+  });
+  if (isFullList && DATA.statuses.indexOf('ブロック') < 0) DATA.statuses.push('ブロック');
+
+  var newCount = 0, updateCount = 0;
+  var seenLineIds = {};
+
+  csvParsed.rows.forEach(function(row) {
+    var name = (row[iName] || '').trim();
+    if (!name) return;
+    var registeredAt = iDate >= 0 ? normalizeDate(row[iDate]) : '';
+    var status = iStatus >= 0 ? (row[iStatus] || '').trim() : '';
+    var lineId = iLineId >= 0 ? (row[iLineId] || '').trim() : '';
+    if (lineId) seenLineIds[lineId] = true;
+    var desiredArea = areaTagColumns.filter(function(c) { return (row[c.index] || '').trim() === '1'; })
+      .map(function(c) { return c.label; }).join('、');
+    var consultationVenue = iVenue >= 0 ? extractVenueFromSession((row[iVenue] || '').trim()) : '';
+
+    var match = null;
+    if (lineId) match = DATA.records.find(function(r) { return r.lineId && r.lineId === lineId; });
+    if (!match) match = DATA.records.find(function(r) { return r.name === name && r.registeredAt === registeredAt; });
+
+    if (match) {
+      match.name = name;
+      if (registeredAt) match.registeredAt = registeredAt;
+      match.source = influencer;
+      if (lineId) match.lineId = lineId;
+      if (status) match.status = status;
+      if (desiredArea) match.desiredArea = desiredArea;
+      if (consultationVenue) match.consultationVenue = consultationVenue;
+      updateCount++;
+    } else {
+      DATA.records.push({
+        id: DATA.nextId++,
+        name: name,
+        status: status || DATA.statuses[0] || '登録のみ',
+        registeredAt: registeredAt,
+        source: influencer,
+        lineId: lineId,
+        travelDate: '', consultationVenue: consultationVenue, location: '', desiredArea: desiredArea, note: '',
+        updatedAt: new Date().toISOString()
+      });
+      newCount++;
+    }
+
+    if (status && DATA.statuses.indexOf(status) < 0) DATA.statuses.push(status);
+    if (consultationVenue && DATA.venues.indexOf(consultationVenue) < 0) DATA.venues.push(consultationVenue);
+  });
+
+  var blockedCount = 0;
+  if (isFullList) {
+    DATA.records.forEach(function(r) {
+      if (r.source === influencer && r.lineId && !seenLineIds[r.lineId] && !isClosedStatus(r.status) && r.status !== 'ブロック') {
+        r.status = 'ブロック';
+        blockedCount++;
+      }
+    });
+  }
+
+  save().then(function() {
+    var msg = '✅ ' + influencer + ': 新規 ' + newCount + '件 / 更新 ' + updateCount + '件';
+    if (isFullList) msg += ' / ブロック ' + blockedCount + '件';
+    toast(msg);
+    populateFilters();
+    showInfluencerTab(influencer);
+  });
+}
+
+// ── 設定 ──────────────────────────────────────────
+function renderSettings() {
+  document.getElementById('statusChips').innerHTML = DATA.statuses.map(function(s, i) {
+    return '<div class="chip">' + esc(s) + '<span class="x" onclick="removeOption(\'statuses\','+i+')">×</span></div>';
+  }).join('') || '<p style="color:#4a7090;font-size:0.85em">なし</p>';
+
+  document.getElementById('sourceChips').innerHTML = DATA.sources.map(function(s, i) {
+    return '<div class="chip">' + esc(s) + '<span class="x" onclick="removeOption(\'sources\','+i+')">×</span></div>';
+  }).join('') || '<p style="color:#4a7090;font-size:0.85em">なし</p>';
+
+  document.getElementById('venueChips').innerHTML = DATA.venues.map(function(s, i) {
+    return '<div class="chip">' + esc(s) + '<span class="x" onclick="removeOption(\'venues\','+i+')">×</span></div>';
+  }).join('') || '<p style="color:#4a7090;font-size:0.85em">なし</p>';
+
+  document.getElementById('areaChips').innerHTML = DATA.areas.map(function(s, i) {
+    return '<div class="chip">' + esc(s) + '<span class="x" onclick="removeOption(\'areas\','+i+')">×</span></div>';
+  }).join('') || '<p style="color:#4a7090;font-size:0.85em">なし</p>';
+}
+
+function addOption(key, inputId) {
+  var input = document.getElementById(inputId);
+  var val = input.value.trim();
+  if (!val) return;
+  if (DATA[key].indexOf(val) >= 0) { toast('⚠️ すでに存在します'); return; }
+  DATA[key].push(val);
+  input.value = '';
+  save('✅ 追加しました').then(function() { populateFilters(); renderSettings(); });
+}
+
+function removeOption(key, idx) {
+  DATA[key].splice(idx, 1);
+  save('🗑️ 削除しました').then(function() { populateFilters(); renderSettings(); });
+}
+
+// ── 月次集計 ──────────────────────────────────────────
+function renderSnapshotTab() {
+  renderSnapshotBusinessTabs();
+  populateSnapshotDatalists();
+  var thisMonth = new Date().toISOString().slice(0, 7);
+  if (!document.getElementById('snapCsvDate').value) document.getElementById('snapCsvDate').value = thisMonth;
+  renderSnapshotTable();
+}
+
+function computeCategoryGrouping(rows) {
+  var categoryOrder = [];
+  var categorySample = {};
+  var metricsByCategory = {};
+  rows.forEach(function(s) {
+    if (!metricsByCategory[s.category]) { metricsByCategory[s.category] = []; categoryOrder.push(s.category); categorySample[s.category] = s; }
+    if (metricsByCategory[s.category].indexOf(s.metric) < 0) metricsByCategory[s.category].push(s.metric);
+  });
+  categoryOrder.sort(function(a, b) {
+    var pa = categoryPriority(categorySample[a]);
+    var pb = categoryPriority(categorySample[b]);
+    return pa[0] - pb[0] || pa[1] - pb[1];
+  });
+  categoryOrder.forEach(function(cat) { sortMetricsByOverride(metricsByCategory[cat]); });
+
+  var groupMembersMap = {};
+  var groupOrder = [];
+  categoryOrder.forEach(function(cat) {
+    var g = categoryGroup(categorySample[cat]);
+    if (!groupMembersMap[g]) { groupMembersMap[g] = []; groupOrder.push(g); }
+    groupMembersMap[g].push(cat);
+  });
+
+  return { categoryOrder: categoryOrder, categorySample: categorySample, metricsByCategory: metricsByCategory, groupOrder: groupOrder, groupMembersMap: groupMembersMap };
+}
+
+function renderSnapshotBusinessTabs() {
+  var el = document.getElementById('snapshotBusinessTabs');
+  var businesses = [];
+  DATA.snapshots.forEach(function(s) { if (businesses.indexOf(s.business) < 0 && SNAP_TAB_HIDDEN_BUSINESSES.indexOf(s.business) < 0) businesses.push(s.business); });
+  if (currentSnapshotBusiness === null && businesses.length > 0) currentSnapshotBusiness = businesses[0];
+  if (businesses.length === 0) { el.innerHTML = ''; return; }
+  el.innerHTML = businesses.map(function(b) {
+    var active = b === currentSnapshotBusiness ? ' active' : '';
+    var arg = b.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return '<button class="tab' + active + '" onclick="showSnapshotBusinessTab(\'' + arg + '\')">' + esc(b) + '</button>';
+  }).join('');
+}
+
+function showSnapshotBusinessTab(business) {
+  currentSnapshotBusiness = business;
+  document.getElementById('snapCsvBusiness').value = business;
+  renderSnapshotBusinessTabs();
+  populateSnapshotDatalists();
+  renderSnapshotTable();
+}
+
+function categoryGroup(s) {
+  if (s.group) return s.group;
+  return /広告$/.test(s.category) ? '広告' : s.category;
+}
+
+function platformOf(category) {
+  if (/instagram/i.test(category)) return 'Instagram';
+  if (/tiktok/i.test(category)) return 'TikTok';
+  if (/youtube/i.test(category)) return 'YouTube';
+  if (/スレッズ|threads/i.test(category)) return 'Threads';
+  if (/note/i.test(category)) return 'note';
+  if (/x/i.test(category)) return 'X';
+  return 'その他';
+}
+
+var MID_TAB_PRIORITY = { '広告': 0, 'SNS': 1, 'オーガニック': 2, 'Lステップ導入前': 3, 'SNS増加数': 4 };
+function midTabPriority(g) {
+  return MID_TAB_PRIORITY.hasOwnProperty(g) ? MID_TAB_PRIORITY[g] : 999;
+}
+
+var CATEGORY_ORDER_OVERRIDE = ['DA広告', 'ドリーム広告', '現代美学広告', 'ベリーグッド広告', 'メインサイト(ナビ本体トップページ)用_流入経路', '旧広告', 'オーガニック', 'Lステップ導入前'];
+var METRIC_ORDER_OVERRIDE = ['全体', 'カウンセ申込済', '来場', '成約', '渡韓済'];
+function sortMetricsByOverride(metrics) {
+  metrics.sort(function(a, b) {
+    var ia = METRIC_ORDER_OVERRIDE.indexOf(a);
+    var ib = METRIC_ORDER_OVERRIDE.indexOf(b);
+    if (ia < 0) ia = 999;
+    if (ib < 0) ib = 999;
+    return ia - ib;
+  });
+}
+function categoryPriority(sample) {
+  var g = categoryGroup(sample);
+  var idx = CATEGORY_ORDER_OVERRIDE.indexOf(sample.category);
+  return [midTabPriority(g), idx >= 0 ? idx : 999];
+}
+
+function populateSnapshotDatalists() {
+  var businesses = [];
+  DATA.snapshots.forEach(function(s) {
+    if (businesses.indexOf(s.business) < 0) businesses.push(s.business);
+  });
+  document.getElementById('snapBusinessList').innerHTML = businesses.map(function(b) { return '<option value="'+esc(b)+'">'; }).join('');
+}
+
+function handleSnapshotCsvFile(file) {
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var buf = e.target.result;
+    var text;
+    try {
+      text = new TextDecoder('utf-8', { fatal: true }).decode(buf);
+    } catch (err) {
+      text = new TextDecoder('shift_jis').decode(buf);
+    }
+    document.getElementById('snapCsvText').value = text;
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+var CATEGORY_ALIASES = {
+  'DA LP Google広告試し用': 'DA広告',
+  'ドリームLP Google広告用': 'ドリーム広告',
+  'ベリーグッド LP Google広告用': 'ベリーグッド広告',
+  '現代美学 LP Google広告用': '現代美学広告',
+  'LINE導入前': 'Lステップ導入前',
+  'メインサイト(ナビ本体トップページ)用': 'メインサイト(ナビ本体トップページ)用_流入経路',
+  '10.naviX（Twitter）': '公式SNS - Navi   X（コウノスケ）',
+  '1. naviInstagram': '公式SNS - Navi 　instagram（コウノスケ）',
+  'よしえオンニTikTok用(プロフィール)': 'よしえオンニ - TikTok（放置）',
+  '村上「おしお」X': 'おしお - X',
+  '梅村X(プロフィール)': 'よしえオンニ - X（コウノスケ）',
+  'よしえオンニYouTube用(プロフィール欄)': 'よしえオンニ - youtube（原川）',
+  'よしえオンニX用(原川)': 'よしえオンニ - X（原川）',
+  '梅村Threads': 'よしえオンニ - スレッズ（コウノスケ）',
+  '2.YouTube': '公式SNS - Navi  YouTube（松永）',
+  'よしえオンニInstagram用(プロフィール)': 'よしえオンニ - Instagram（原川）',
+  'よしえオンニYouTube用(コメント欄)': 'よしえオンニ - youtube（原川）'
+};
+
+function normalizeSnapCategory(raw) {
+  var category = (raw || '').trim().replace(/_?流入経路(\(.+?\))?$/, '').trim().replace(/\s+/g, ' ');
+  return CATEGORY_ALIASES[category] || category;
+}
+
+function importSnapshotCsv() {
+  var business = document.getElementById('snapCsvBusiness').value.trim();
+  var date = document.getElementById('snapCsvDate').value;
+  var text = document.getElementById('snapCsvText').value.trim();
+
+  if (!business) { toast('⚠️ 事業を入力してください'); return; }
+  if (!date) { toast('⚠️ 日付を選んでください'); return; }
+  if (!text) { toast('⚠️ CSVを選択するか貼り付けてください'); return; }
+
+  var lines = text.split(/\r\n|\n|\r/).filter(function(l) { return l.trim() !== ''; });
+  if (lines.length < 2) { toast('⚠️ データ行が見つかりません'); return; }
+
+  var headers = parseCsvLine(lines[0]);
+  var rows = lines.slice(1).map(parseCsvLine);
+  var count = 0;
+
+  rows.forEach(function(row) {
+    var category = normalizeSnapCategory(row[0]);
+    if (!category) return;
+    for (var i = 1; i < headers.length; i++) {
+      var metric = (headers[i] || '').trim();
+      var raw = (row[i] || '').trim();
+      if (!metric || raw === '') continue;
+      var value = Number(raw.replace(/,/g, ''));
+      if (isNaN(value)) continue;
+
+      var existing = DATA.snapshots.find(function(s) { return s.business === business && s.category === category && s.metric === metric && s.date === date; });
+      if (existing) {
+        existing.value = value;
+      } else {
+        var entry = { id: DATA.nextSnapshotId++, business: business, category: category, metric: metric, date: date, value: value };
+        var groupSample = DATA.snapshots.find(function(s) { return s.business === business && s.category === category && s.group; });
+        if (groupSample) entry.group = groupSample.group;
+        DATA.snapshots.push(entry);
+      }
+      count++;
+    }
+  });
+
+  currentSnapshotBusiness = business;
+  save('✅ ' + count + '件を記録しました').then(function() {
+    renderSnapshotBusinessTabs();
+    populateSnapshotDatalists();
+    renderSnapshotTable();
+  });
+}
+
+function deleteSnapshotEntry(id) {
+  if (!confirm('この数値を削除しますか？')) return;
+  DATA.snapshots = DATA.snapshots.filter(function(s) { return s.id !== id; });
+  save('🗑️ 削除しました').then(function() { renderSnapshotTable(); });
+}
+
+function startEditCell(el, id, createKey) {
+  var td = el.parentElement;
+  var current = id ? (DATA.snapshots.find(function(s) { return s.id === id; }) || {}).value : '';
+  var input = document.createElement('input');
+  input.type = 'number';
+  input.className = 'cell-edit-input';
+  input.value = current === undefined ? '' : current;
+  var done = false;
+  function finish() {
+    if (done) return;
+    done = true;
+    commitEditCell(input.value, id, createKey);
+  }
+  input.onblur = finish;
+  input.onkeydown = function(e) {
+    if (e.key === 'Enter') { input.blur(); }
+    else if (e.key === 'Escape') { done = true; renderSnapshotTable(); }
+  };
+  td.innerHTML = '';
+  td.appendChild(input);
+  input.focus();
+  input.select();
+}
+
+function commitEditCell(raw, id, createKey) {
+  raw = (raw || '').trim();
+  if (raw === '') {
+    if (id) {
+      DATA.snapshots = DATA.snapshots.filter(function(s) { return s.id !== id; });
+      save('🗑️ 削除しました').then(function() { renderSnapshotTable(); }).catch(function() { renderSnapshotTable(); });
+    } else {
+      renderSnapshotTable();
+    }
+    return;
+  }
+  var value = Number(raw);
+  if (isNaN(value)) { toast('⚠️ 数値を入力してください'); renderSnapshotTable(); return; }
+  if (id) {
+    var entry = DATA.snapshots.find(function(s) { return s.id === id; });
+    if (!entry) { renderSnapshotTable(); return; }
+    if (entry.value === value) { renderSnapshotTable(); return; }
+    entry.value = value;
+  } else if (createKey) {
+    var parts = createKey.replace(/\\'/g, "'").split('｜');
+    DATA.snapshots.push({ id: DATA.nextSnapshotId++, business: parts[0], category: parts[1], metric: parts[2], date: parts[3], value: value });
+  } else {
+    renderSnapshotTable();
+    return;
+  }
+  save('✅ 更新しました').then(function() { renderSnapshotTable(); }).catch(function() { renderSnapshotTable(); });
+}
+
+function renderSnapshotTable() {
+  var area = document.getElementById('snapshotTableArea');
+  var prevWrap = area.querySelector('.snap-wrap');
+  var prevScrollLeft = prevWrap ? prevWrap.scrollLeft : 0;
+  var prevScrollTop = prevWrap ? prevWrap.scrollTop : 0;
+  if (!currentSnapshotBusiness) { area.innerHTML = '<p class="empty">まだ記録がありません。上のフォームから追加してください。</p>'; return; }
+
+  var allRows = DATA.snapshots.filter(function(s) { return s.business === currentSnapshotBusiness; });
+  if (allRows.length === 0) { area.innerHTML = '<p class="empty">まだ記録がありません。上のフォームから追加してください。</p>'; return; }
+
+  var rows = showZentaiOnly ? allRows.filter(function(s) { return s.metric === '全体'; }) : allRows;
+
+  var dates = [];
+  rows.forEach(function(s) { if (dates.indexOf(s.date) < 0) dates.push(s.date); });
+  dates.sort();
+
+  var isPeriodMode = currentSnapshotBusiness === 'SNS増加数';
+  var monthGroups = [];
+  if (isPeriodMode) {
+    dates.forEach(function(d) {
+      var m = d.slice(0, 7);
+      if (monthGroups.indexOf(m) < 0) monthGroups.push(m);
+    });
+  }
+  var dataColCount = isPeriodMode ? monthGroups.length * 4 : dates.length;
+
+  var groups = {};
+  var order = [];
+  var grouping = computeCategoryGrouping(rows);
+  var metricsByCategory = grouping.metricsByCategory;
+  var groupMembersMap = grouping.groupMembersMap;
+  var groupOrder = grouping.groupOrder;
+
+  var PLATFORM_GROUP_ORDER = ['Instagram', 'X', 'YouTube', 'TikTok', 'Threads', 'note', 'その他'];
+  var PLATFORM_BREAKDOWN_GROUPS = ['SNS'];
+
+  groupOrder.forEach(function(g) {
+    var headerKey = '__HEADER__' + g;
+    groups[headerKey] = { isHeader: true, group: g, memberCount: groupMembersMap[g].length };
+    order.push(headerKey);
+
+    if (expandedGroups[g] && groupMembersMap[g].length > 1) {
+      var groupRows = rows.filter(function(s) { return categoryGroup(s) === g; });
+      var aggMetrics = [];
+      var aggByMetric = {};
+      groupRows.forEach(function(s) {
+        if (!aggByMetric[s.metric]) { aggByMetric[s.metric] = {}; aggMetrics.push(s.metric); }
+        var cur = aggByMetric[s.metric][s.date];
+        aggByMetric[s.metric][s.date] = (cur || 0) + s.value;
+      });
+      sortMetricsByOverride(aggMetrics);
+      aggMetrics.forEach(function(metric, mi) {
+        var aggKey = '__AGG__' + g + '｜' + metric;
+        groups[aggKey] = { isAgg: true, isAggFirst: mi === 0, group: g, category: g + ' 合計', metric: metric, byDate: {} };
+        Object.keys(aggByMetric[metric]).forEach(function(d) { groups[aggKey].byDate[d] = { value: aggByMetric[metric][d] }; });
+        order.push(aggKey);
+      });
+    }
+
+    var isPlatformBreakdownGroup = PLATFORM_BREAKDOWN_GROUPS.indexOf(g) >= 0 && groupMembersMap[g].length > 1;
+
+    if (expandedGroups[g] && isPlatformBreakdownGroup && expandedAggDetails[g]) {
+      var members = groupMembersMap[g];
+      var byPlatform = {};
+      rows.forEach(function(s) {
+        if (members.indexOf(s.category) < 0) return;
+        var p = platformOf(s.category);
+        if (!byPlatform[p]) byPlatform[p] = {};
+        if (!byPlatform[p][s.metric]) byPlatform[p][s.metric] = {};
+        byPlatform[p][s.metric][s.date] = (byPlatform[p][s.metric][s.date] || 0) + s.value;
+      });
+      PLATFORM_GROUP_ORDER.forEach(function(p) {
+        if (!byPlatform[p]) return;
+        var platformMembers = members.filter(function(cat2) { return platformOf(cat2) === p; });
+        if (platformMembers.length === 1) {
+          var soloCat = platformMembers[0];
+          metricsByCategory[soloCat].forEach(function(metric) {
+            var soloKey = soloCat + '｜' + metric;
+            groups[soloKey] = { category: soloCat, metric: metric, byDate: {} };
+            order.push(soloKey);
+          });
+          return;
+        }
+        var platformKey = g + '｜' + p;
+        var platformMetrics = Object.keys(byPlatform[p]);
+        sortMetricsByOverride(platformMetrics);
+        platformMetrics.forEach(function(metric, pmi) {
+          var pKey = '__PLATFORM__' + platformKey + '｜' + metric;
+          groups[pKey] = { category: p, metric: metric, byDate: {}, isPlatform: true, isPlatformFirst: pmi === 0, platformKey: platformKey };
+          Object.keys(byPlatform[p][metric]).forEach(function(d) { groups[pKey].byDate[d] = { value: byPlatform[p][metric][d] }; });
+          order.push(pKey);
+        });
+        if (expandedPlatformDetails[platformKey]) {
+          platformMembers.forEach(function(cat2) {
+            metricsByCategory[cat2].forEach(function(metric) {
+              var key = cat2 + '｜' + metric;
+              groups[key] = { category: cat2, metric: metric, byDate: {} };
+              order.push(key);
+            });
+          });
+        }
+      });
+    } else if (expandedGroups[g] && !isPlatformBreakdownGroup && (groupMembersMap[g].length === 1 || expandedAggDetails[g])) {
+      groupMembersMap[g].forEach(function(cat) {
+        metricsByCategory[cat].forEach(function(metric) {
+          var key = cat + '｜' + metric;
+          groups[key] = { category: cat, metric: metric, byDate: {} };
+          order.push(key);
+        });
+      });
+    }
+
+    if (expandedGroups[g] && expandedCompareGroups[g] && !isPeriodMode) {
+      var compareBusinesses = [];
+      DATA.snapshots.forEach(function(s) {
+        if (s.business === currentSnapshotBusiness) return;
+        if (COMPARE_EXCLUDED_BUSINESSES.indexOf(s.business) >= 0) return;
+        if (categoryGroup(s) !== g) return;
+        if (compareBusinesses.indexOf(s.business) < 0) compareBusinesses.push(s.business);
+      });
+      compareBusinesses.forEach(function(otherBiz) {
+        var labelKey = '__COMPARELABEL__' + g + '｜' + otherBiz;
+        groups[labelKey] = { isCompareLabel: true, group: g, business: otherBiz, byDate: {} };
+        order.push(labelKey);
+
+        var otherRows = DATA.snapshots.filter(function(s) { return s.business === otherBiz && categoryGroup(s) === g && (!showZentaiOnly || s.metric === '全体'); });
+
+        var otherCategories = [];
+        var otherMetricsByCategory = {};
+        var otherByCategoryMetric = {};
+        otherRows.forEach(function(s) {
+          if (otherCategories.indexOf(s.category) < 0) otherCategories.push(s.category);
+          if (!otherMetricsByCategory[s.category]) otherMetricsByCategory[s.category] = [];
+          if (otherMetricsByCategory[s.category].indexOf(s.metric) < 0) otherMetricsByCategory[s.category].push(s.metric);
+          var k = s.category + '｜' + s.metric;
+          if (!otherByCategoryMetric[k]) otherByCategoryMetric[k] = {};
+          otherByCategoryMetric[k][s.date] = s;
+        });
+        otherCategories.sort(function(a, b) {
+          var ia = CATEGORY_ORDER_OVERRIDE.indexOf(a);
+          var ib = CATEGORY_ORDER_OVERRIDE.indexOf(b);
+          if (ia < 0) ia = 999;
+          if (ib < 0) ib = 999;
+          return ia - ib;
+        });
+        otherCategories.forEach(function(cat) { sortMetricsByOverride(otherMetricsByCategory[cat]); });
+
+        if (otherCategories.length > 1) {
+          var cAggMetrics = [];
+          var cAggByMetric = {};
+          otherRows.forEach(function(s) {
+            if (!cAggByMetric[s.metric]) { cAggByMetric[s.metric] = {}; cAggMetrics.push(s.metric); }
+            var cur = cAggByMetric[s.metric][s.date];
+            cAggByMetric[s.metric][s.date] = (cur || 0) + s.value;
+          });
+          sortMetricsByOverride(cAggMetrics);
+          cAggMetrics.forEach(function(metric) {
+            var cKey = '__COMPARE__' + g + '｜' + otherBiz + '｜' + metric;
+            groups[cKey] = { isCompare: true, group: g, category: otherBiz + ' 合計', metric: metric, byDate: {} };
+            Object.keys(cAggByMetric[metric]).forEach(function(d) { groups[cKey].byDate[d] = { value: cAggByMetric[metric][d] }; });
+            order.push(cKey);
+          });
+        }
+
+        otherCategories.forEach(function(cat) {
+          otherMetricsByCategory[cat].forEach(function(metric) {
+            var ck = '__COMPARECAT__' + g + '｜' + otherBiz + '｜' + cat + '｜' + metric;
+            groups[ck] = { isCompare: true, group: g, category: cat, metric: metric, byDate: otherByCategoryMetric[cat + '｜' + metric] || {} };
+            order.push(ck);
+          });
+        });
+      });
+    }
+  });
+  rows.forEach(function(s) {
+    var key = s.category + '｜' + s.metric;
+    if (groups[key]) groups[key].byDate[s.date] = s;
+  });
+
+  var latestYear = dates.length ? dates[dates.length - 1].slice(0, 4) : '';
+
+  var thead;
+  if (isPeriodMode) {
+    var PERIOD_LABELS = ['1〜10', '11〜20', '21〜31', '合計'];
+    var monthHeaderCells = monthGroups.map(function(m) { return '<th class="month-th" colspan="4">' + esc(formatMonth(m)) + '</th>'; }).join('');
+    var periodHeaderCells = monthGroups.map(function() { return PERIOD_LABELS.map(function(lbl, li) { return '<th class="period-th' + (li === 3 ? ' period-total-th' : '') + '">' + lbl + '</th>'; }).join(''); }).join('');
+    thead = '<tr><th class="th-cat" rowspan="2">カテゴリ</th><th class="th-metric" rowspan="2">項目</th><th class="th-year" rowspan="2">年間累計</th><th class="th-all" rowspan="2">全体累計</th>' + monthHeaderCells + '</tr><tr>' + periodHeaderCells + '</tr>';
+  } else {
+    thead = '<tr><th class="th-cat">カテゴリ</th><th class="th-metric">項目</th><th class="th-year">年間累計</th><th class="th-all">全体累計</th>' + dates.map(function(d) { return '<th>' + esc(formatMonth(d)) + '</th>'; }).join('') + '</tr>';
+  }
+
+  var lastCategory = null;
+  var bodyRows = order.map(function(key) {
+    var g = groups[key];
+    if (g.isHeader) {
+      lastCategory = null;
+      var arrow = expandedGroups[g.group] ? '▼' : '▶';
+      var gArg = g.group.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      var countBadge = g.memberCount > 1 ? ' <span style="font-weight:400;color:#8494a8;font-size:0.85em">(' + g.memberCount + ')</span>' : '';
+      var compareToggleHtml = isPeriodMode ? '' : ' <span class="compare-toggle' + (expandedCompareGroups[g.group] ? ' active' : '') + '" onclick="event.stopPropagation(); toggleCompareGroup(\'' + gArg + '\')">⇄ 他事業と比較</span>';
+      var headerFillerCells = [];
+      for (var hi = 0; hi < dataColCount; hi++) headerFillerCells.push('<td class="num">-</td>');
+      return '<tr class="group-start group-header-row" onclick="toggleGroupExpand(\'' + gArg + '\')"><td class="group-header-cell" colspan="2">' + arrow + ' ' + esc(g.group) + countBadge + compareToggleHtml + '</td><td class="num year-total">-</td><td class="num all-total">-</td>' + headerFillerCells.join('') + '</tr>';
+    }
+    if (g.isCompareLabel) {
+      lastCategory = null;
+      var compareFillerCells = [];
+      for (var ci = 0; ci < dataColCount; ci++) compareFillerCells.push('<td class="num">-</td>');
+      return '<tr class="compare-label-row"><td class="compare-label-cell" colspan="2">' + esc(g.business) + '</td><td class="num year-total">-</td><td class="num all-total">-</td>' + compareFillerCells.join('') + '</tr>';
+    }
+    var isGroupStart = g.category !== lastCategory;
+    var catLabel = isGroupStart ? esc(g.category) : '';
+    lastCategory = g.category;
+
+    var summaryCells;
+    {
+      var yearTotal = null, allTotal = null;
+      for (var di = dates.length - 1; di >= 0; di--) {
+        var d = dates[di];
+        var entry = g.byDate[d];
+        if (!entry) continue;
+        if (allTotal === null) allTotal = entry.value;
+        if (yearTotal === null && d.slice(0, 4) === latestYear) yearTotal = entry.value;
+        if (allTotal !== null && yearTotal !== null) break;
+      }
+      summaryCells = '<td class="num year-total">' + (yearTotal === null ? '-' : yearTotal.toLocaleString('ja-JP')) + '</td><td class="num all-total">' + (allTotal === null ? '-' : allTotal.toLocaleString('ja-JP')) + '</td>';
+    }
+
+    var cells;
+    if (isPeriodMode) {
+      cells = monthGroups.map(function(m) {
+        var periodKeys = [m + '-P1', m + '-P2', m + '-P3'];
+        var periodCells = periodKeys.map(function(d) {
+          var entry = g.byDate[d];
+          if (!entry) {
+            if (g.isAgg || g.isPlatform || g.isCompare) return '<td class="num">-</td>';
+            var createKey = [currentSnapshotBusiness, g.category, g.metric, d].join('｜').replace(/'/g, "\\'");
+            return '<td class="num"><span class="editable-cell" onclick="startEditCell(this,null,\'' + createKey + '\')" title="クリックで入力">-</span></td>';
+          }
+          var valueHtml = entry.id !== undefined
+            ? '<span class="editable-cell" onclick="startEditCell(this,' + entry.id + ',null)" title="クリックで編集">' + entry.value.toLocaleString('ja-JP') + '</span>'
+            : entry.value.toLocaleString('ja-JP');
+          return '<td class="num">' + valueHtml + '</td>';
+        }).join('');
+        var totalHtml = '-';
+        if (g.metric !== 'フォロワー総数') {
+          var sum = null;
+          periodKeys.forEach(function(d) {
+            var entry = g.byDate[d];
+            if (entry) sum = (sum || 0) + entry.value;
+          });
+          totalHtml = sum === null ? '-' : sum.toLocaleString('ja-JP');
+        }
+        return periodCells + '<td class="num total-col">' + totalHtml + '</td>';
+      }).join('');
+    } else {
+      cells = dates.map(function(d, i) {
+        var entry = g.byDate[d];
+        if (!entry) {
+          if (g.isAgg || g.isPlatform || g.isCompare) return '<td class="num">-</td>';
+          var createKey = [currentSnapshotBusiness, g.category, g.metric, d].join('｜').replace(/'/g, "\\'");
+          return '<td class="num"><span class="editable-cell" onclick="startEditCell(this,null,\'' + createKey + '\')" title="クリックで入力">-</span></td>';
+        }
+        var valueHtml = entry.id !== undefined
+          ? '<span class="editable-cell" onclick="startEditCell(this,' + entry.id + ',null)" title="クリックで編集">' + entry.value.toLocaleString('ja-JP') + '</span>'
+          : entry.value.toLocaleString('ja-JP');
+        var prevVal = null;
+        for (var j = i - 1; j >= 0; j--) {
+          var prevEntry = g.byDate[dates[j]];
+          if (prevEntry) { prevVal = prevEntry.value; break; }
+        }
+        var deltaHtml = '';
+        if (prevVal !== null) {
+          var diff = entry.value - prevVal;
+          var pct = prevVal !== 0 ? Math.round(diff / prevVal * 1000) / 10 : null;
+          deltaHtml = formatDelta(diff, pct);
+        }
+        return '<td class="num">' + valueHtml + deltaHtml + '</td>';
+      }).join('');
+    }
+
+    var trClass = (isGroupStart ? 'group-start' : '') + (g.isAgg || g.isPlatform || g.isCompare ? ' agg-row' : '') + (g.isCompare ? ' compare-row' : '');
+    var rowAttrs = '';
+    if (g.isAggFirst) {
+      var gArg = g.group.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      rowAttrs = ' onclick="toggleAggDetail(\'' + gArg + '\')" style="cursor:pointer"';
+      var arrow = expandedAggDetails[g.group] ? '▼' : '▶';
+      catLabel = arrow + ' ' + catLabel;
+    }
+    if (g.isPlatformFirst) {
+      var pArg = g.platformKey.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      rowAttrs = ' onclick="togglePlatformDetail(\'' + pArg + '\')" style="cursor:pointer"';
+      var parrow = expandedPlatformDetails[g.platformKey] ? '▼' : '▶';
+      catLabel = parrow + ' ' + catLabel;
+    }
+    return '<tr class="' + trClass + '"' + rowAttrs + '><td class="cat-label">' + catLabel + '</td><td class="metric-label">' + esc(g.metric) + '</td>' + summaryCells + cells + '</tr>';
+  }).join('');
+
+  var tableHtml = '<div class="table-wrap snap-wrap"><table class="snap-table"><thead>' + thead + '</thead><tbody>' + bodyRows + '</tbody></table></div>';
+
+  area.innerHTML = tableHtml;
+  var newWrap = area.querySelector('.snap-wrap');
+  if (newWrap) { newWrap.scrollLeft = prevScrollLeft; newWrap.scrollTop = prevScrollTop; }
+}
+
+function showManagerTab(person) {
+  currentManagerPerson = person;
+  currentManagerCategory = null;
+  currentManagerPlatforms = [];
+  renderManagersTab();
+}
+
+function setManagerCategory(category) {
+  currentManagerCategory = category;
+  renderManagersTab();
+}
+
+function toggleManagerPlatform(platform) {
+  var idx = currentManagerPlatforms.indexOf(platform);
+  if (idx >= 0) currentManagerPlatforms.splice(idx, 1);
+  else currentManagerPlatforms.push(platform);
+  renderManagersTab();
+}
+
+function renderManagersTab() {
+  var area = document.getElementById('managersArea');
+  var rows = DATA.snapshots.filter(function(s) { return s.group === 'SNS' && (s.business === 'Navi' || s.business === '江南') && s.person; });
+
+  var persons = [];
+  rows.forEach(function(s) { if (persons.indexOf(s.person) < 0) persons.push(s.person); });
+  persons.sort(function(a, b) { return a.localeCompare(b, 'ja'); });
+
+  if (persons.length === 0) {
+    area.innerHTML = '<p class="empty">担当者が設定されたSNSデータがありません。</p>';
+    return;
+  }
+  if (currentManagerPerson && persons.indexOf(currentManagerPerson) < 0) { currentManagerPerson = null; currentManagerCategory = null; }
+
+  var personRows = currentManagerPerson ? rows.filter(function(s) { return s.person === currentManagerPerson; }) : [];
+  var categories = [];
+  personRows.forEach(function(s) { if (categories.indexOf(s.category) < 0) categories.push(s.category); });
+  if (currentManagerCategory && currentManagerCategory !== '__ALL__' && categories.indexOf(currentManagerCategory) < 0) currentManagerCategory = null;
+
+  var sidebarHtml = '<div class="snap-sidebar">' + persons.map(function(p) {
+    var arg = p.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    var isSel = currentManagerPerson === p;
+    var html = '<button class="snap-nav-item' + (isSel ? ' active' : '') + '" onclick="showManagerTab(\'' + arg + '\')">' + esc(p) + '</button>';
+    if (isSel && categories.length > 1) {
+      html += '<button class="snap-nav-sub' + (!currentManagerCategory ? ' active' : '') + '" onclick="setManagerCategory(null)">全体（集計）</button>';
+      html += '<button class="snap-nav-sub' + (currentManagerCategory === '__ALL__' ? ' active' : '') + '" onclick="setManagerCategory(\'__ALL__\')">チャンネル別に全部表示</button>';
+      html += categories.map(function(c) {
+        var cArg = c.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        return '<button class="snap-nav-sub' + (currentManagerCategory === c ? ' active' : '') + '" onclick="setManagerCategory(\'' + cArg + '\')">' + esc(c) + '</button>';
+      }).join('');
+    }
+    return html;
+  }).join('') + '</div>';
+
+  if (!currentManagerPerson) {
+    area.innerHTML = '<div class="snap-layout">' + sidebarHtml + '<div class="snap-main"><p class="empty">左から担当者を選んでください。</p></div></div>';
+    return;
+  }
+
+  var PLATFORM_ORDER = ['Instagram', 'X', 'YouTube', 'TikTok', 'Threads', 'その他'];
+  var availablePlatforms = [];
+  categories.forEach(function(c) { var p = platformOf(c); if (availablePlatforms.indexOf(p) < 0) availablePlatforms.push(p); });
+  availablePlatforms.sort(function(a, b) { return PLATFORM_ORDER.indexOf(a) - PLATFORM_ORDER.indexOf(b); });
+  currentManagerPlatforms = currentManagerPlatforms.filter(function(p) { return availablePlatforms.indexOf(p) >= 0; });
+
+  var platformFilterHtml = availablePlatforms.length > 1 ? '<div class="tab-row" style="margin-bottom:14px">' + availablePlatforms.map(function(p) {
+    var pArg = p.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    var isOn = currentManagerPlatforms.indexOf(p) >= 0;
+    return '<button class="tab' + (isOn ? ' active' : '') + '" onclick="toggleManagerPlatform(\'' + pArg + '\')">' + esc(p) + '</button>';
+  }).join('') + '</div>' : '';
+
+  var platformFilteredRows = currentManagerPlatforms.length ? personRows.filter(function(s) { return currentManagerPlatforms.indexOf(platformOf(s.category)) >= 0; }) : personRows;
+
+  var showAllBreakdown = currentManagerCategory === '__ALL__';
+  var targetRows = (currentManagerCategory && !showAllBreakdown) ? platformFilteredRows.filter(function(s) { return s.category === currentManagerCategory; }) : platformFilteredRows;
+  var isAggregate = !currentManagerCategory && categories.length > 1;
+
+  var dates = [];
+  targetRows.forEach(function(s) { if (dates.indexOf(s.date) < 0) dates.push(s.date); });
+  dates.sort();
+
+  var METRIC_ORDER = ['全体', 'カウンセ申込済', '来場', '成約', '渡韓済'];
+  var thead, bodyRows;
+
+  if (showAllBreakdown) {
+    var categoryOrder = [];
+    var metricsByCategory = {};
+    targetRows.forEach(function(s) {
+      if (!metricsByCategory[s.category]) { metricsByCategory[s.category] = []; categoryOrder.push(s.category); }
+      if (metricsByCategory[s.category].indexOf(s.metric) < 0) metricsByCategory[s.category].push(s.metric);
+    });
+    categoryOrder.forEach(function(cat) {
+      metricsByCategory[cat].sort(function(a, b) { return METRIC_ORDER.indexOf(a) - METRIC_ORDER.indexOf(b); });
+    });
+    var byKeyDate = {};
+    targetRows.forEach(function(s) { byKeyDate[s.category + '｜' + s.metric + '｜' + s.date] = s.value; });
+
+    thead = '<tr><th>チャンネル</th><th>項目</th>' + dates.map(function(d) { return '<th>' + esc(formatMonth(d)) + '</th>'; }).join('') + '</tr>';
+    var lastCat = null;
+    bodyRows = categoryOrder.map(function(cat) {
+      return metricsByCategory[cat].map(function(metric) {
+        var isStart = cat !== lastCat;
+        var catLabel = isStart ? esc(cat) : '';
+        lastCat = cat;
+        var cells = dates.map(function(d, i) {
+          var val = byKeyDate[cat + '｜' + metric + '｜' + d];
+          if (val === undefined) return '<td class="num">-</td>';
+          var prevVal;
+          for (var j = i - 1; j >= 0; j--) {
+            var pv = byKeyDate[cat + '｜' + metric + '｜' + dates[j]];
+            if (pv !== undefined) { prevVal = pv; break; }
+          }
+          var deltaHtml = '';
+          if (prevVal !== undefined) {
+            var diff = val - prevVal;
+            var pct = prevVal !== 0 ? Math.round(diff / prevVal * 1000) / 10 : null;
+            deltaHtml = formatDelta(diff, pct);
+          }
+          return '<td class="num">' + val.toLocaleString('ja-JP') + deltaHtml + '</td>';
+        }).join('');
+        return '<tr class="' + (isStart ? 'group-start' : '') + '"><td class="cat-label">' + catLabel + '</td><td class="metric-label">' + esc(metric) + '</td>' + cells + '</tr>';
+      }).join('');
+    }).join('');
+  } else {
+    var groups = {};
+    var groupsUsed = [];
+    targetRows.forEach(function(s) {
+      if (!groups[s.metric]) { groups[s.metric] = { metric: s.metric, byDate: {} }; if (groupsUsed.indexOf(s.metric) < 0) groupsUsed.push(s.metric); }
+      if (isAggregate) {
+        var cur = groups[s.metric].byDate[s.date];
+        groups[s.metric].byDate[s.date] = (cur || 0) + s.value;
+      } else {
+        groups[s.metric].byDate[s.date] = s.value;
+      }
+    });
+    var order = METRIC_ORDER.filter(function(m) { return groupsUsed.indexOf(m) >= 0; }).concat(groupsUsed.filter(function(m) { return METRIC_ORDER.indexOf(m) < 0; }));
+
+    thead = '<tr><th>項目</th>' + dates.map(function(d) { return '<th>' + esc(formatMonth(d)) + '</th>'; }).join('') + '</tr>';
+
+    bodyRows = order.map(function(metric) {
+      var g = groups[metric];
+      var cells = dates.map(function(d, i) {
+        var val = g.byDate[d];
+        if (val === undefined) return '<td class="num">-</td>';
+        var prevVal;
+        for (var j = i - 1; j >= 0; j--) { if (g.byDate[dates[j]] !== undefined) { prevVal = g.byDate[dates[j]]; break; } }
+        var deltaHtml = '';
+        if (prevVal !== undefined) {
+          var diff = val - prevVal;
+          var pct = prevVal !== 0 ? Math.round(diff / prevVal * 1000) / 10 : null;
+          deltaHtml = formatDelta(diff, pct);
+        }
+        return '<td class="num">' + val.toLocaleString('ja-JP') + deltaHtml + '</td>';
+      }).join('');
+      return '<tr><td class="metric-label">' + esc(metric) + '</td>' + cells + '</tr>';
+    }).join('');
+  }
+
+  var headingHtml = showAllBreakdown
+    ? '<p style="font-size:0.8em;color:#7088a0;margin-bottom:12px">担当チャンネル: ' + categories.map(esc).join('、') + '（チャンネル別）</p>'
+    : currentManagerCategory
+    ? '<p style="font-size:0.8em;color:#7088a0;margin-bottom:12px">チャンネル: ' + esc(currentManagerCategory) + '</p>'
+    : '<p style="font-size:0.8em;color:#7088a0;margin-bottom:12px">担当チャンネル: ' + categories.map(esc).join('、') + '</p>';
+
+  var tableHtml = platformFilterHtml + headingHtml + '<div class="table-wrap snap-wrap"><table class="snap-table"><thead>' + thead + '</thead><tbody>' + bodyRows + '</tbody></table></div>';
+
+  area.innerHTML = '<div class="snap-layout">' + sidebarHtml + '<div class="snap-main">' + tableHtml + '</div></div>';
+}
+
+// 初期化
+reload();
+</script>
+</body>
+</html>

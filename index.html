@@ -1559,6 +1559,50 @@ function renderSnapshotTable() {
     if (groups[key]) groups[key].byDate[s.date] = s;
   });
 
+  if (isPeriodMode) {
+    var totalsByCategory = {};
+    rows.forEach(function(s) {
+      if (s.metric !== 'フォロワー総数') return;
+      if (!totalsByCategory[s.category]) totalsByCategory[s.category] = {};
+      totalsByCategory[s.category][s.date] = s.value;
+    });
+    var prevTotal = function(totalsMap, d) {
+      var idx = dates.indexOf(d);
+      for (var i = idx - 1; i >= 0; i--) {
+        if (totalsMap[dates[i]] !== undefined) return totalsMap[dates[i]];
+      }
+      return null;
+    };
+    order.forEach(function(key) {
+      var g = groups[key];
+      if (g.metric !== 'フォロワー増加') return;
+      var totalsMap;
+      if (g.isAgg) {
+        var memberCats = groupMembersMap[g.group] || [];
+        totalsMap = {};
+        dates.forEach(function(d) {
+          var sum = null;
+          memberCats.forEach(function(c) {
+            var t = totalsByCategory[c] && totalsByCategory[c][d];
+            if (t !== undefined) sum = (sum || 0) + t;
+          });
+          if (sum !== null) totalsMap[d] = sum;
+        });
+      } else {
+        totalsMap = totalsByCategory[g.category] || {};
+      }
+      var newByDate = {};
+      dates.forEach(function(d) {
+        if (totalsMap[d] === undefined) return;
+        var prev = prevTotal(totalsMap, d);
+        if (prev === null) return;
+        newByDate[d] = { value: totalsMap[d] - prev };
+      });
+      g.byDate = newByDate;
+      g.isComputedGrowth = true;
+    });
+  }
+
   var latestYear = dates.length ? dates[dates.length - 1].slice(0, 4) : '';
 
   var thead;
@@ -1615,7 +1659,7 @@ function renderSnapshotTable() {
         var periodCells = periodKeys.map(function(d) {
           var entry = g.byDate[d];
           if (!entry) {
-            if (g.isAgg || g.isPlatform || g.isCompare) return '<td class="num">-</td>';
+            if (g.isAgg || g.isPlatform || g.isCompare || g.isComputedGrowth) return '<td class="num">-</td>';
             var createKey = [currentSnapshotBusiness, g.category, g.metric, d].join('｜').replace(/'/g, "\\'");
             return '<td class="num"><span class="editable-cell" onclick="startEditCell(this,null,\'' + createKey + '\')" title="クリックで入力">-</span></td>';
           }

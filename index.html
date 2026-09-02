@@ -89,8 +89,9 @@
   .map-row select { flex: 1; padding: 7px 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; color: #2a3a50; }
   .preview-table { overflow-x: auto; margin-top: 10px; }
   .preview-table table { font-size: 0.75em; }
-  .table-wrap { overflow-x: auto; }
-  .table-wrap table { white-space: nowrap; }
+  .table-wrap { overflow: auto; max-height: calc(100vh - 320px); border: 1px solid #e5eaf0; border-radius: 10px; }
+  .table-wrap table { white-space: nowrap; border: none; border-radius: 0; overflow: visible; }
+  .table-wrap table thead th { position: sticky; top: 0; z-index: 2; }
 
   #snapshotBusinessTabs.tab-row { gap: 2px; border-bottom: 1px solid #e5eaf0; padding-bottom: 0; margin-bottom: 20px; }
   #snapshotBusinessTabs .tab { border: none; border-radius: 0; background: transparent; color: #8494a8; font-weight: 500; padding: 10px 18px; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s ease, border-color .15s ease; }

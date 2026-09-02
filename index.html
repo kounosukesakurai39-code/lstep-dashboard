@@ -510,7 +510,7 @@ function renderInfluencerPanel() {
   document.getElementById('influencerKpiRow2').innerHTML =
     kpiCard(total ? Math.round(traveled/total*100) + '%' : '-', '渡韓率') +
     kpiCard(traveled, '渡韓数') +
-    kpiCard(formatRevenue(totalRevenue) || '0円', '売上合計');
+    kpiCard(formatRevenue(totalRevenue) || '₩0', '売上合計');
 
   document.getElementById('influencerSearchInput').value = '';
   renderInfluencerStatusChips();
@@ -654,7 +654,7 @@ function renderList() {
 function formatRevenue(revenue) {
   if (!revenue) return '';
   var n = Number(revenue);
-  return isNaN(n) ? esc(revenue) : n.toLocaleString('ja-JP') + '円';
+  return isNaN(n) ? esc(revenue) : '₩' + n.toLocaleString('ja-JP');
 }
 
 function formatMonth(ym) {
@@ -841,7 +841,7 @@ function renderCharts() {
     kpiCard(total ? Math.round(closed/total*100) + '%' : '-', '成約率') +
     kpiCard(traveled, '渡韓数') +
     kpiCard(total ? Math.round(traveled/total*100) + '%' : '-', '渡韓率') +
-    kpiCard(formatRevenue(totalRevenue) || '0円', '売上合計');
+    kpiCard(formatRevenue(totalRevenue) || '₩0', '売上合計');
 
   // 月別推移
   var byMonth = {};

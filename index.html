@@ -1382,7 +1382,12 @@ function commitEditCell(raw, id, createKey) {
     entry.value = value;
   } else if (createKey) {
     var parts = createKey.replace(/\\'/g, "'").split('｜');
-    DATA.snapshots.push({ id: DATA.nextSnapshotId++, business: parts[0], category: parts[1], metric: parts[2], date: parts[3], value: value });
+    var newEntry = { id: DATA.nextSnapshotId++, business: parts[0], category: parts[1], metric: parts[2], date: parts[3], value: value };
+    var groupSample = DATA.snapshots.find(function(s) { return s.business === parts[0] && s.category === parts[1] && s.group; });
+    if (groupSample) newEntry.group = groupSample.group;
+    var personSample = DATA.snapshots.find(function(s) { return s.business === parts[0] && s.category === parts[1] && s.person; });
+    if (personSample) newEntry.person = personSample.person;
+    DATA.snapshots.push(newEntry);
   } else {
     renderSnapshotTable();
     return;
@@ -1651,13 +1656,22 @@ function renderSnapshotTable() {
     var summaryCells;
     {
       var yearTotal = null, allTotal = null;
-      for (var di = dates.length - 1; di >= 0; di--) {
-        var d = dates[di];
-        var entry = g.byDate[d];
-        if (!entry) continue;
-        if (allTotal === null) allTotal = entry.value;
-        if (yearTotal === null && d.slice(0, 4) === latestYear) yearTotal = entry.value;
-        if (allTotal !== null && yearTotal !== null) break;
+      if (isPeriodMode && g.metric !== 'フォロワー総数') {
+        dates.forEach(function(d) {
+          var entry = g.byDate[d];
+          if (!entry) return;
+          allTotal = (allTotal || 0) + entry.value;
+          if (d.slice(0, 4) === latestYear) yearTotal = (yearTotal || 0) + entry.value;
+        });
+      } else {
+        for (var di = dates.length - 1; di >= 0; di--) {
+          var d = dates[di];
+          var entry = g.byDate[d];
+          if (!entry) continue;
+          if (allTotal === null) allTotal = entry.value;
+          if (yearTotal === null && d.slice(0, 4) === latestYear) yearTotal = entry.value;
+          if (allTotal !== null && yearTotal !== null) break;
+        }
       }
       summaryCells = '<td class="num year-total">' + (yearTotal === null ? '-' : yearTotal.toLocaleString('ja-JP')) + '</td><td class="num all-total">' + (allTotal === null ? '-' : allTotal.toLocaleString('ja-JP')) + '</td>';
     }

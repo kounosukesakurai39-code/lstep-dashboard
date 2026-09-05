@@ -52,10 +52,11 @@
   .editable-cell { cursor: pointer; border-radius: 4px; padding: 2px 5px; display: inline-block; transition: background .1s ease; }
   .editable-cell:hover { background: #eaf2f9; outline: 1px dashed #8fb4d4; }
   .cell-edit-input { width: 72px; text-align: right; font-size: 0.95em; padding: 2px 4px; border: 1px solid #14548a; border-radius: 4px; outline: none; box-shadow: 0 0 0 2px rgba(20,84,138,0.15); }
-  .delta-badge { display: inline-block; font-size: 0.74em; font-weight: 700; padding: 1px 6px; border-radius: 8px; margin-top: 3px; letter-spacing: 0.01em; white-space: nowrap; }
-  .delta-badge.delta-up { background: #e7f6ec; color: #1f8a4c; }
-  .delta-badge.delta-down { background: #fbe4e6; color: #c0304a; }
-  .delta-badge.delta-flat { background: #eef1f5; color: #7088a0; }
+  .delta-main { display: inline-block; font-size: 1.05em; font-weight: 800; white-space: nowrap; }
+  .delta-main.delta-up { color: #1f8a4c; }
+  .delta-main.delta-down { color: #c0304a; }
+  .delta-main.delta-flat { color: #7088a0; }
+  .cell-subvalue { display: inline-block; margin-top: 2px; font-size: 0.74em; color: #8494a8; font-weight: 500; }
   .snap-table tr:nth-child(even) { background: #fafbfd; }
   .snap-table td.cat-label { font-weight: bold; color: #1a6090; background: #f4f7fa; }
   .empty { text-align: center; color: #a0b0c0; padding: 40px 0; }
@@ -665,12 +666,13 @@ function formatMonth(ym) {
   return parts[0] + '年' + parseInt(parts[1], 10) + '月';
 }
 
-function formatDelta(diff, pct) {
+function formatCellWithDelta(valueHtml, diff, pct) {
+  if (diff === null) return valueHtml;
   var sign = diff > 0 ? '+' : '';
   var cls = diff > 0 ? 'delta-up' : (diff < 0 ? 'delta-down' : 'delta-flat');
   var arrow = diff > 0 ? '▲' : (diff < 0 ? '▼' : '－');
-  var pctHtml = pct !== null ? ' (' + sign + pct + '%)' : '';
-  return '<br><span class="delta-badge ' + cls + '">' + arrow + ' ' + sign + diff.toLocaleString('ja-JP') + pctHtml + '</span>';
+  var pctHtml = pct !== null ? '（' + sign + pct + '%）' : '';
+  return '<span class="delta-main ' + cls + '">' + arrow + ' ' + sign + diff.toLocaleString('ja-JP') + '</span><br><span class="cell-subvalue">' + valueHtml + pctHtml + '</span>';
 }
 
 function buildTableHtml(list) {
@@ -1719,13 +1721,12 @@ function renderSnapshotTable() {
           var prevEntry = g.byDate[dates[j]];
           if (prevEntry) { prevVal = prevEntry.value; break; }
         }
-        var deltaHtml = '';
+        var diff = null, pct = null;
         if (prevVal !== null) {
-          var diff = entry.value - prevVal;
-          var pct = prevVal !== 0 ? Math.round(diff / prevVal * 1000) / 10 : null;
-          deltaHtml = formatDelta(diff, pct);
+          diff = entry.value - prevVal;
+          pct = prevVal !== 0 ? Math.round(diff / prevVal * 1000) / 10 : null;
         }
-        return '<td class="num">' + valueHtml + deltaHtml + '</td>';
+        return '<td class="num">' + formatCellWithDelta(valueHtml, diff, pct) + '</td>';
       }).join('');
     }
 
@@ -1864,13 +1865,12 @@ function renderManagersTab() {
             var pv = byKeyDate[cat + '｜' + metric + '｜' + dates[j]];
             if (pv !== undefined) { prevVal = pv; break; }
           }
-          var deltaHtml = '';
+          var diff = null, pct = null;
           if (prevVal !== undefined) {
-            var diff = val - prevVal;
-            var pct = prevVal !== 0 ? Math.round(diff / prevVal * 1000) / 10 : null;
-            deltaHtml = formatDelta(diff, pct);
+            diff = val - prevVal;
+            pct = prevVal !== 0 ? Math.round(diff / prevVal * 1000) / 10 : null;
           }
-          return '<td class="num">' + val.toLocaleString('ja-JP') + deltaHtml + '</td>';
+          return '<td class="num">' + formatCellWithDelta(val.toLocaleString('ja-JP'), diff, pct) + '</td>';
         }).join('');
         return '<tr class="' + (isStart ? 'group-start' : '') + '"><td class="cat-label">' + catLabel + '</td><td class="metric-label">' + esc(metric) + '</td>' + cells + '</tr>';
       }).join('');
@@ -1898,13 +1898,12 @@ function renderManagersTab() {
         if (val === undefined) return '<td class="num">-</td>';
         var prevVal;
         for (var j = i - 1; j >= 0; j--) { if (g.byDate[dates[j]] !== undefined) { prevVal = g.byDate[dates[j]]; break; } }
-        var deltaHtml = '';
+        var diff = null, pct = null;
         if (prevVal !== undefined) {
-          var diff = val - prevVal;
-          var pct = prevVal !== 0 ? Math.round(diff / prevVal * 1000) / 10 : null;
-          deltaHtml = formatDelta(diff, pct);
+          diff = val - prevVal;
+          pct = prevVal !== 0 ? Math.round(diff / prevVal * 1000) / 10 : null;
         }
-        return '<td class="num">' + val.toLocaleString('ja-JP') + deltaHtml + '</td>';
+        return '<td class="num">' + formatCellWithDelta(val.toLocaleString('ja-JP'), diff, pct) + '</td>';
       }).join('');
       return '<tr><td class="metric-label">' + esc(metric) + '</td>' + cells + '</tr>';
     }).join('');

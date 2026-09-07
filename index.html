@@ -130,9 +130,18 @@
   .snap-table tr.agg-row td { background: #f6f9fc; font-weight: 600; }
   .snap-table tr.agg-row td.cat-label { color: #3a5a80; }
   .snap-table tr.group-header-row { cursor: pointer; }
-  .snap-table tr.group-header-row td { background: #eef4f9 !important; font-weight: 600; color: #14548a; }
+  .snap-table tr.group-header-row td { background: #eef4f9 !important; font-weight: 600; color: #14548a; position: sticky; top: 35.5px; z-index: 1; box-shadow: 0 1px 0 #dbe4ee; }
+  .snap-table tr.group-header-row.two-row-head td { top: 71px; }
   .snap-table tr.group-header-row:hover td { background: #e3edf6 !important; }
   .snap-table td.group-header-cell { position: sticky; left: 0; z-index: 1; white-space: nowrap; }
+  .snap-table tr.group-header-row td.group-header-cell { z-index: 2; }
+
+  .open-groups-tray { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
+  .group-chip { display: inline-flex; align-items: center; gap: 6px; background: #eef4fa; border: 1px solid #cfe0f0; color: #14548a; font-size: 0.78em; font-weight: 600; padding: 4px 6px 4px 10px; border-radius: 999px; cursor: pointer; transition: background .15s; }
+  .group-chip:hover { background: #dfebf7; }
+  .group-chip .chip-x { width: 16px; height: 16px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: rgba(20,84,138,0.12); font-size: 0.85em; line-height: 1; }
+  .tray-closeall { font-size: 0.75em; color: #7088a0; background: none; border: 1px solid #e5eaf0; border-radius: 999px; padding: 4px 10px; cursor: pointer; }
+  .tray-closeall:hover { border-color: #b9c6d6; color: #163a5c; }
   .compare-toggle { font-size: 0.82em; font-weight: 500; color: #7088a0; background: #fff; border: 1px solid #d5dee8; border-radius: 12px; padding: 2px 10px; margin-left: 8px; cursor: pointer; display: inline-block; }
   .compare-toggle:hover { color: #14548a; border-color: #8fb4d4; }
   .compare-toggle.active { background: #14548a; color: #fff; border-color: #14548a; }
@@ -370,6 +379,11 @@ var COMPARE_EXCLUDED_BUSINESSES = ['SNS増加数'];
 
 function toggleGroupExpand(g) {
   expandedGroups[g] = !expandedGroups[g];
+  renderSnapshotTable();
+}
+
+function collapseAllGroups() {
+  expandedGroups = {};
   renderSnapshotTable();
 }
 
@@ -1677,7 +1691,8 @@ function renderSnapshotTable() {
       var compareToggleHtml = (isPeriodMode || isSartoMode) ? '' : ' <span class="compare-toggle' + (expandedCompareGroups[g.group] ? ' active' : '') + '" onclick="event.stopPropagation(); toggleCompareGroup(\'' + gArg + '\')">⇄ 他事業と比較</span>';
       var headerFillerCells = [];
       for (var hi = 0; hi < dataColCount; hi++) headerFillerCells.push('<td class="num">-</td>');
-      return '<tr class="group-start group-header-row" onclick="toggleGroupExpand(\'' + gArg + '\')"><td class="group-header-cell" colspan="2">' + arrow + ' ' + esc(g.group) + countBadge + compareToggleHtml + '</td><td class="num year-total">-</td><td class="num all-total">-</td>' + headerFillerCells.join('') + '</tr>';
+      var headRowClass = 'group-start group-header-row' + ((isPeriodMode || isSartoMode) ? ' two-row-head' : '');
+      return '<tr class="' + headRowClass + '" onclick="toggleGroupExpand(\'' + gArg + '\')"><td class="group-header-cell" colspan="2">' + arrow + ' ' + esc(g.group) + countBadge + compareToggleHtml + '</td><td class="num year-total">-</td><td class="num all-total">-</td>' + headerFillerCells.join('') + '</tr>';
     }
     if (g.isCompareLabel) {
       lastCategory = null;
@@ -1811,7 +1826,21 @@ function renderSnapshotTable() {
     return '<tr class="' + trClass + '"' + rowAttrs + '><td class="cat-label">' + catLabel + '</td><td class="metric-label">' + esc(g.metric) + '</td>' + summaryCells + cells + '</tr>';
   }).join('');
 
-  var tableHtml = '<div class="table-wrap snap-wrap"><table class="snap-table"><thead>' + thead + '</thead><tbody>' + bodyRows + '</tbody></table></div>';
+  var openGroupNames = [];
+  order.forEach(function(key) {
+    var g = groups[key];
+    if (g.isHeader && expandedGroups[g.group] && openGroupNames.indexOf(g.group) < 0) openGroupNames.push(g.group);
+  });
+  var trayHtml = '';
+  if (openGroupNames.length) {
+    var chipsHtml = openGroupNames.map(function(name) {
+      var chipArg = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      return '<span class="group-chip" onclick="toggleGroupExpand(\'' + chipArg + '\')">' + esc(name) + '<span class="chip-x">×</span></span>';
+    }).join('');
+    trayHtml = '<div class="open-groups-tray">' + chipsHtml + '<button class="tray-closeall" onclick="collapseAllGroups()">すべて閉じる</button></div>';
+  }
+
+  var tableHtml = trayHtml + '<div class="table-wrap snap-wrap"><table class="snap-table"><thead>' + thead + '</thead><tbody>' + bodyRows + '</tbody></table></div>';
 
   area.innerHTML = tableHtml;
   var newWrap = area.querySelector('.snap-wrap');

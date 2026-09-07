@@ -122,6 +122,7 @@
   .snap-table thead th.th-all { left: 390px; width: 90px; }
   .snap-table thead th.period-th { top: 35.5px; width: 70px; }
   .snap-table thead th.month-th { width: 280px; border-right: 2px solid #b9c6d6; }
+  .snap-table thead th.month-th-2 { width: 140px; border-right: 2px solid #b9c6d6; }
   .snap-table thead th.period-total-th { border-right: 2px solid #b9c6d6; }
   .snap-table td.total-col { background: #f4f8fc; font-weight: 600; color: #14548a; border-right: 2px solid #b9c6d6; }
   .snap-table tbody tr:hover td { background: #f7faff; }
@@ -1414,6 +1415,7 @@ function renderSnapshotTable() {
   dates.sort();
 
   var isPeriodMode = currentSnapshotBusiness === 'SNS増加数';
+  var isSartoMode = currentSnapshotBusiness === 'SARTO';
   var monthGroups = [];
   if (isPeriodMode) {
     dates.forEach(function(d) {
@@ -1421,7 +1423,12 @@ function renderSnapshotTable() {
       if (monthGroups.indexOf(m) < 0) monthGroups.push(m);
     });
   }
-  var dataColCount = isPeriodMode ? monthGroups.length * 4 : dates.length;
+  var dataColCount = isPeriodMode ? monthGroups.length * 4 : (isSartoMode ? dates.length * 2 : dates.length);
+  var SARTO_RATE_ROWS = {
+    '全体｜アンケート済': { label: 'アンケート率', numCat: '全体', numMetric: 'アンケート済', denCat: '全体', denMetric: '登録者数' },
+    '店頭登録｜アンケート済': { label: 'アンケート率', numCat: '店頭登録', numMetric: 'アンケート済', denCat: '店頭登録', denMetric: '店頭登録数' },
+    'ブロック｜ブロック': { label: 'ブロック率', numCat: 'ブロック', numMetric: 'ブロック', denCat: '店頭登録', denMetric: 'アンケート済' }
+  };
 
   var groups = {};
   var order = [];
@@ -1505,6 +1512,29 @@ function renderSnapshotTable() {
           var key = cat + '｜' + metric;
           groups[key] = { category: cat, metric: metric, byDate: {} };
           order.push(key);
+
+          if (isSartoMode) {
+            var rateInfo = SARTO_RATE_ROWS[cat + '｜' + metric];
+            if (rateInfo) {
+              var rateKey = '__RATE__' + cat + '｜' + rateInfo.label;
+              var rateByDate = {};
+              dates.forEach(function(d, di) {
+                if (di === 0) return;
+                var prevD = dates[di - 1];
+                var numCur = rows.find(function(s) { return s.category === rateInfo.numCat && s.metric === rateInfo.numMetric && s.date === d; });
+                var numPrev = rows.find(function(s) { return s.category === rateInfo.numCat && s.metric === rateInfo.numMetric && s.date === prevD; });
+                var denCur = rows.find(function(s) { return s.category === rateInfo.denCat && s.metric === rateInfo.denMetric && s.date === d; });
+                var denPrev = rows.find(function(s) { return s.category === rateInfo.denCat && s.metric === rateInfo.denMetric && s.date === prevD; });
+                if (numCur && numPrev && denCur && denPrev) {
+                  var numInc = numCur.value - numPrev.value;
+                  var denInc = denCur.value - denPrev.value;
+                  if (denInc) rateByDate[d] = { value: numInc / denInc * 100 };
+                }
+              });
+              groups[rateKey] = { category: cat, metric: rateInfo.label, byDate: rateByDate, isRateRow: true };
+              order.push(rateKey);
+            }
+          }
         });
       });
     }
@@ -1628,6 +1658,10 @@ function renderSnapshotTable() {
     var monthHeaderCells = monthGroups.map(function(m) { return '<th class="month-th" colspan="4">' + esc(formatMonth(m)) + '</th>'; }).join('');
     var periodHeaderCells = monthGroups.map(function() { return PERIOD_LABELS.map(function(lbl, li) { return '<th class="period-th' + (li === 3 ? ' period-total-th' : '') + '">' + lbl + '</th>'; }).join(''); }).join('');
     thead = '<tr><th class="th-cat" rowspan="2">カテゴリ</th><th class="th-metric" rowspan="2">項目</th><th class="th-year" rowspan="2">年間累計</th><th class="th-all" rowspan="2">全体累計</th>' + monthHeaderCells + '</tr><tr>' + periodHeaderCells + '</tr>';
+  } else if (isSartoMode) {
+    var sartoMonthHeaderCells = dates.map(function(d) { return '<th class="month-th-2" colspan="2">' + esc(formatMonth(d)) + '</th>'; }).join('');
+    var sartoSubHeaderCells = dates.map(function() { return '<th class="period-th">実数</th><th class="period-th period-total-th">増加数</th>'; }).join('');
+    thead = '<tr><th class="th-cat" rowspan="2">カテゴリ</th><th class="th-metric" rowspan="2">項目</th><th class="th-year" rowspan="2">年間累計</th><th class="th-all" rowspan="2">全体累計</th>' + sartoMonthHeaderCells + '</tr><tr>' + sartoSubHeaderCells + '</tr>';
   } else {
     thead = '<tr><th class="th-cat">カテゴリ</th><th class="th-metric">項目</th><th class="th-year">年間累計</th><th class="th-all">全体累計</th>' + dates.map(function(d) { return '<th>' + esc(formatMonth(d)) + '</th>'; }).join('') + '</tr>';
   }
@@ -1675,7 +1709,8 @@ function renderSnapshotTable() {
           if (allTotal !== null && yearTotal !== null) break;
         }
       }
-      summaryCells = '<td class="num year-total">' + (yearTotal === null ? '-' : yearTotal.toLocaleString('ja-JP')) + '</td><td class="num all-total">' + (allTotal === null ? '-' : allTotal.toLocaleString('ja-JP')) + '</td>';
+      var formatSummary = function(v) { return v === null ? '-' : (g.isRateRow ? v.toFixed(1) + '%' : v.toLocaleString('ja-JP')); };
+      summaryCells = '<td class="num year-total">' + formatSummary(yearTotal) + '</td><td class="num all-total">' + formatSummary(allTotal) + '</td>';
     }
 
     var cells;
@@ -1705,6 +1740,35 @@ function renderSnapshotTable() {
         }
         return periodCells + '<td class="num total-col">' + totalHtml + '</td>';
       }).join('');
+    } else if (isSartoMode) {
+      cells = dates.map(function(d, i) {
+        var entry = g.byDate[d];
+        if (g.isRateRow) {
+          var pctHtml = entry ? entry.value.toFixed(1) + '%' : '-';
+          return '<td class="num">' + pctHtml + '</td><td class="num">-</td>';
+        }
+        if (!entry) {
+          if (g.isAgg || g.isPlatform || g.isCompare) return '<td class="num">-</td><td class="num">-</td>';
+          var createKey = [currentSnapshotBusiness, g.category, g.metric, d].join('｜').replace(/'/g, "\\'");
+          return '<td class="num"><span class="editable-cell" onclick="startEditCell(this,null,\'' + createKey + '\')" title="クリックで入力">-</span></td><td class="num">-</td>';
+        }
+        var valueHtml = entry.id !== undefined
+          ? '<span class="editable-cell" onclick="startEditCell(this,' + entry.id + ',null)" title="クリックで編集">' + entry.value.toLocaleString('ja-JP') + '</span>'
+          : entry.value.toLocaleString('ja-JP');
+        var prevVal = null;
+        for (var j = i - 1; j >= 0; j--) {
+          var prevEntry = g.byDate[dates[j]];
+          if (prevEntry) { prevVal = prevEntry.value; break; }
+        }
+        var increaseHtml = '-';
+        if (prevVal !== null) {
+          var diff = entry.value - prevVal;
+          var sign = diff > 0 ? '+' : '';
+          var cls = diff > 0 ? 'delta-up' : (diff < 0 ? 'delta-down' : 'delta-flat');
+          increaseHtml = '<span class="delta-main ' + cls + '" style="font-size:0.88em">' + sign + diff.toLocaleString('ja-JP') + '</span>';
+        }
+        return '<td class="num">' + valueHtml + '</td><td class="num">' + increaseHtml + '</td>';
+      }).join('');
     } else {
       cells = dates.map(function(d, i) {
         var entry = g.byDate[d];
@@ -1730,7 +1794,7 @@ function renderSnapshotTable() {
       }).join('');
     }
 
-    var trClass = (isGroupStart ? 'group-start' : '') + (g.isAgg || g.isPlatform || g.isCompare ? ' agg-row' : '') + (g.isCompare ? ' compare-row' : '');
+    var trClass = (isGroupStart ? 'group-start' : '') + (g.isAgg || g.isPlatform || g.isCompare || g.isRateRow ? ' agg-row' : '') + (g.isCompare ? ' compare-row' : '');
     var rowAttrs = '';
     if (g.isAggFirst) {
       var gArg = g.group.replace(/\\/g, '\\\\').replace(/'/g, "\\'");

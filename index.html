@@ -1674,7 +1674,7 @@ function renderSnapshotTable() {
       var arrow = expandedGroups[g.group] ? '▼' : '▶';
       var gArg = g.group.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       var countBadge = g.memberCount > 1 ? ' <span style="font-weight:400;color:#8494a8;font-size:0.85em">(' + g.memberCount + ')</span>' : '';
-      var compareToggleHtml = isPeriodMode ? '' : ' <span class="compare-toggle' + (expandedCompareGroups[g.group] ? ' active' : '') + '" onclick="event.stopPropagation(); toggleCompareGroup(\'' + gArg + '\')">⇄ 他事業と比較</span>';
+      var compareToggleHtml = (isPeriodMode || isSartoMode) ? '' : ' <span class="compare-toggle' + (expandedCompareGroups[g.group] ? ' active' : '') + '" onclick="event.stopPropagation(); toggleCompareGroup(\'' + gArg + '\')">⇄ 他事業と比較</span>';
       var headerFillerCells = [];
       for (var hi = 0; hi < dataColCount; hi++) headerFillerCells.push('<td class="num">-</td>');
       return '<tr class="group-start group-header-row" onclick="toggleGroupExpand(\'' + gArg + '\')"><td class="group-header-cell" colspan="2">' + arrow + ' ' + esc(g.group) + countBadge + compareToggleHtml + '</td><td class="num year-total">-</td><td class="num all-total">-</td>' + headerFillerCells.join('') + '</tr>';

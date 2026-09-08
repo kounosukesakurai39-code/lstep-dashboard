@@ -1690,9 +1690,26 @@ function renderSnapshotTable() {
       var countBadge = g.memberCount > 1 ? ' <span style="font-weight:400;color:#8494a8;font-size:0.85em">(' + g.memberCount + ')</span>' : '';
       var compareToggleHtml = (isPeriodMode || isSartoMode) ? '' : ' <span class="compare-toggle' + (expandedCompareGroups[g.group] ? ' active' : '') + '" onclick="event.stopPropagation(); toggleCompareGroup(\'' + gArg + '\')">⇄ 他事業と比較</span>';
       var headerFillerCells = [];
-      for (var hi = 0; hi < dataColCount; hi++) headerFillerCells.push('<td class="num">-</td>');
+      var headYearTotalHtml = '-', headAllTotalHtml = '-';
+      if (!isPeriodMode && !isSartoMode) {
+        var headZentaiByDate = {};
+        rows.forEach(function(s) { if (s.metric === '全体' && categoryGroup(s) === g.group) headZentaiByDate[s.date] = (headZentaiByDate[s.date] || 0) + s.value; });
+        for (var hi = 0; hi < dataColCount; hi++) {
+          var hv = headZentaiByDate[dates[hi]];
+          headerFillerCells.push('<td class="num">' + (hv === undefined ? '-' : hv.toLocaleString('ja-JP')) + '</td>');
+        }
+        for (var hdi = dates.length - 1; hdi >= 0; hdi--) {
+          var hv2 = headZentaiByDate[dates[hdi]];
+          if (hv2 === undefined) continue;
+          if (headAllTotalHtml === '-') headAllTotalHtml = hv2.toLocaleString('ja-JP');
+          if (headYearTotalHtml === '-' && dates[hdi].slice(0, 4) === latestYear) headYearTotalHtml = hv2.toLocaleString('ja-JP');
+          if (headAllTotalHtml !== '-' && headYearTotalHtml !== '-') break;
+        }
+      } else {
+        for (var hi2 = 0; hi2 < dataColCount; hi2++) headerFillerCells.push('<td class="num">-</td>');
+      }
       var headRowClass = 'group-start group-header-row' + ((isPeriodMode || isSartoMode) ? ' two-row-head' : '');
-      return '<tr class="' + headRowClass + '" onclick="toggleGroupExpand(\'' + gArg + '\')"><td class="group-header-cell" colspan="2">' + arrow + ' ' + esc(g.group) + countBadge + compareToggleHtml + '</td><td class="num year-total">-</td><td class="num all-total">-</td>' + headerFillerCells.join('') + '</tr>';
+      return '<tr class="' + headRowClass + '" onclick="toggleGroupExpand(\'' + gArg + '\')"><td class="group-header-cell" colspan="2">' + arrow + ' ' + esc(g.group) + countBadge + compareToggleHtml + '</td><td class="num year-total">' + headYearTotalHtml + '</td><td class="num all-total">' + headAllTotalHtml + '</td>' + headerFillerCells.join('') + '</tr>';
     }
     if (g.isCompareLabel) {
       lastCategory = null;

@@ -109,6 +109,12 @@
   .snap-nav-sub { text-align: left; padding: 7px 12px 7px 22px; border-radius: 7px; border: none; background: transparent; color: #7c8ca0; cursor: pointer; font-size: 0.8em; margin-left: 6px; transition: background .12s ease, color .12s ease; }
   .snap-nav-sub:hover { background: #f4f7fb; color: #163a5c; }
   .snap-nav-sub.active { background: #14548a; color: #fff; }
+  .snap-nav-sub2 { text-align: left; padding: 7px 12px 7px 36px; border-radius: 7px; border: none; background: transparent; color: #7c8ca0; cursor: pointer; font-size: 0.78em; margin-left: 6px; transition: background .12s ease, color .12s ease; }
+  .snap-nav-sub2:hover { background: #f4f7fb; color: #163a5c; }
+  .snap-nav-sub2.active { background: #14548a; color: #fff; }
+  .snap-nav-sub-group { text-align: left; padding: 7px 12px 7px 22px; border-radius: 7px; border: none; background: transparent; color: #7c8ca0; cursor: pointer; font-size: 0.8em; margin-left: 6px; transition: background .12s ease, color .12s ease; display: flex; align-items: center; gap: 6px; }
+  .snap-nav-sub-group:hover { background: #f4f7fb; color: #163a5c; }
+  .snap-nav-sub-group .count { font-size: 0.85em; color: #b0bdcc; }
   .snap-main { flex: 1; min-width: 0; }
   .snap-wrap { overflow: auto; max-height: calc(100vh - 40px); border: 1px solid #eef1f5; border-radius: 12px; box-shadow: 0 1px 2px rgba(16,24,40,0.04), 0 1px 3px rgba(16,24,40,0.05); }
   .snap-wrap table { border: none; border-radius: 0; border-collapse: separate; border-spacing: 0; overflow: visible; font-size: 0.82em; table-layout: fixed; }
@@ -456,6 +462,15 @@ function toast(msg) {
 }
 
 var influencerGroupOpen = false;
+var INFLUENCER_GROUPS = {
+  'よしえオンニ': ['よしえオンニインスタグラム（原川）', 'よしえオンニyoutubeショート（原川）']
+};
+var influencerSubGroupOpen = {};
+
+function toggleInfluencerSubGroup(name) {
+  influencerSubGroupOpen[name] = !influencerSubGroupOpen[name];
+  renderInfluencerTabs();
+}
 
 function showTab(id) {
   influencerGroupOpen = false;
@@ -486,13 +501,44 @@ function renderInfluencerTabs() {
   document.querySelectorAll('.tab-influencer').forEach(function(el) { el.remove(); });
   if (!influencerGroupOpen) return;
   var anchor = document.getElementById('tabbtn-influencerGroup');
+  var memberToGroup = {};
+  Object.keys(INFLUENCER_GROUPS).forEach(function(g) {
+    INFLUENCER_GROUPS[g].forEach(function(m) {
+      memberToGroup[m] = g;
+      if (currentInfluencer === m) influencerSubGroupOpen[g] = true;
+    });
+  });
+  var renderedGroups = {};
   DATA.sources.forEach(function(name) {
-    var btn = document.createElement('button');
-    btn.className = 'snap-nav-sub tab-influencer' + (currentInfluencer === name ? ' active' : '');
-    btn.textContent = name;
-    btn.onclick = function() { showInfluencerTab(name); };
-    anchor.insertAdjacentElement('afterend', btn);
-    anchor = btn;
+    var group = memberToGroup[name];
+    if (group) {
+      if (renderedGroups[group]) return;
+      renderedGroups[group] = true;
+      var isOpen = !!influencerSubGroupOpen[group];
+      var head = document.createElement('button');
+      head.className = 'snap-nav-sub-group tab-influencer';
+      head.innerHTML = '<span>' + (isOpen ? '▼' : '▶') + '</span><span>' + esc(group) + '</span><span class="count">(' + INFLUENCER_GROUPS[group].length + ')</span>';
+      head.onclick = function() { toggleInfluencerSubGroup(group); };
+      anchor.insertAdjacentElement('afterend', head);
+      anchor = head;
+      if (isOpen) {
+        INFLUENCER_GROUPS[group].forEach(function(sub) {
+          var subBtn = document.createElement('button');
+          subBtn.className = 'snap-nav-sub2 tab-influencer' + (currentInfluencer === sub ? ' active' : '');
+          subBtn.textContent = sub;
+          subBtn.onclick = function() { showInfluencerTab(sub); };
+          anchor.insertAdjacentElement('afterend', subBtn);
+          anchor = subBtn;
+        });
+      }
+    } else {
+      var btn = document.createElement('button');
+      btn.className = 'snap-nav-sub tab-influencer' + (currentInfluencer === name ? ' active' : '');
+      btn.textContent = name;
+      btn.onclick = function() { showInfluencerTab(name); };
+      anchor.insertAdjacentElement('afterend', btn);
+      anchor = btn;
+    }
   });
 }
 

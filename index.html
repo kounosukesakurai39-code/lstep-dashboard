@@ -2046,9 +2046,18 @@ function updateIncentiveCell(id, field, value) {
 
 function updateIncentiveRate(value) {
   if (!currentIncentiveSource) return;
-  if (value === '') delete DATA.incentiveRates[currentIncentiveSource];
-  else DATA.incentiveRates[currentIncentiveSource] = value;
+  if (value === '') { delete DATA.incentiveRates[currentIncentiveSource]; save(); return; }
+  DATA.incentiveRates[currentIncentiveSource] = value;
+  var rate = Number(value);
+  if (rate) {
+    DATA.incentiveRows.forEach(function(r) {
+      if (r.source !== currentIncentiveSource) return;
+      var amount = Number(r.amount);
+      if (!r.bonus && amount) r.bonus = String(Math.round(amount * rate / 100));
+    });
+  }
   save();
+  renderManagersTab();
 }
 
 function syncIncentiveRowsFromRecords(source) {
@@ -2065,6 +2074,8 @@ function syncIncentiveRowsFromRecords(source) {
     row.region = rec.location || '';
     row.hospital = rec.surgeryVenue || rec.consultationVenue || '';
     row.amount = rec.revenue || '';
+    var syncRate = Number(DATA.incentiveRates[source]);
+    if (syncRate && row.amount) row.bonus = String(Math.round(Number(row.amount) * syncRate / 100));
     DATA.incentiveRows.push(row);
     added = true;
   });

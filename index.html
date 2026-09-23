@@ -2014,6 +2014,13 @@ function toggleIncentiveSubGroup(name) {
   renderManagersTab();
 }
 
+function showIncentiveAll() {
+  currentIncentiveGroup = '__ALL__';
+  currentIncentiveSource = null;
+  currentIncentiveMonth = null;
+  renderManagersTab();
+}
+
 var INCENTIVE_COLUMNS = [
   { key: 'join', label: '参加日' },
   { key: 'hospital', label: '病院' },
@@ -2138,7 +2145,8 @@ function renderManagersTab() {
   });
 
   var renderedGroups = {};
-  var sidebarItems = [];
+  var isAllSel = currentIncentiveGroup === '__ALL__' && !currentIncentiveSource;
+  var sidebarItems = ['<button class="snap-nav-item' + (isAllSel ? ' active' : '') + '" onclick="showIncentiveAll()">全体</button>'];
   DATA.sources.forEach(function(name) {
     var group = memberToGroup[name];
     if (group) {
@@ -2164,7 +2172,7 @@ function renderManagersTab() {
   var sidebarHtml = '<div class="snap-sidebar">' + sidebarItems.join('') + '</div>';
 
   if (currentIncentiveGroup && !currentIncentiveSource) {
-    var groupSources = INFLUENCER_GROUPS[currentIncentiveGroup] || [];
+    var groupSources = currentIncentiveGroup === '__ALL__' ? DATA.sources.slice() : (INFLUENCER_GROUPS[currentIncentiveGroup] || []);
     groupSources.forEach(function(src) { syncIncentiveRowsFromRecords(src); });
     var groupRows = DATA.incentiveRows.filter(function(r) { return groupSources.indexOf(r.source) >= 0; });
 
@@ -2194,7 +2202,8 @@ function renderManagersTab() {
         '<tr class="incentive-total-row"><td class="cat-label">合計</td><td class="num">' + gTotalCount + '</td><td class="num">' + formatRevenue(gTotalAmount) + '</td><td class="num">' + formatRevenue(gTotalBonus) + '</td></tr>' +
         '</tbody></table></div>';
 
-    var groupHeadingHtml = '<div class="incentive-head"><p class="incentive-title">' + esc(currentIncentiveGroup) + ' 全体（プラットフォーム別集計）</p></div>';
+    var groupTitleText = currentIncentiveGroup === '__ALL__' ? '全体（プラットフォーム別集計）' : (esc(currentIncentiveGroup) + ' 全体（プラットフォーム別集計）');
+    var groupHeadingHtml = '<div class="incentive-head"><p class="incentive-title">' + groupTitleText + '</p></div>';
     area.innerHTML = '<div class="snap-layout">' + sidebarHtml + '<div class="snap-main">' + groupHeadingHtml + groupMainHtml + '</div></div>';
     return;
   }

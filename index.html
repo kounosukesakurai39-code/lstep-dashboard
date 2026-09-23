@@ -453,6 +453,11 @@ var currentIncentiveSource = null;
 var incentiveSubGroupOpen = {};
 var currentIncentiveMonth = null;
 var currentIncentiveGroup = null;
+var currentIncentivePlatform = null;
+var SOURCE_PLATFORM_OVERRIDE = { 'Emmaさん': 'X', 'おしおさん': 'X' };
+function getSourcePlatform(source) {
+  return SOURCE_PLATFORM_OVERRIDE[source] || platformOf(source);
+}
 var editingId = null;
 var currentSurgeryAreas = [];
 var influencerStatusFilters = [];
@@ -1977,6 +1982,7 @@ function showIncentiveSource(name) {
   currentIncentiveSource = name;
   currentIncentiveGroup = null;
   currentIncentiveMonth = null;
+  currentIncentivePlatform = null;
   renderManagersTab();
 }
 
@@ -2011,6 +2017,7 @@ function toggleIncentiveSubGroup(name) {
   currentIncentiveGroup = name;
   currentIncentiveSource = null;
   currentIncentiveMonth = null;
+  currentIncentivePlatform = null;
   renderManagersTab();
 }
 
@@ -2018,6 +2025,17 @@ function showIncentiveAll() {
   currentIncentiveGroup = '__ALL__';
   currentIncentiveSource = null;
   currentIncentiveMonth = null;
+  currentIncentivePlatform = null;
+  renderManagersTab();
+}
+
+function showIncentivePlatform(platform) {
+  currentIncentivePlatform = platform;
+  renderManagersTab();
+}
+
+function backToIncentiveGroupSummary() {
+  currentIncentivePlatform = null;
   renderManagersTab();
 }
 
@@ -2176,34 +2194,52 @@ function renderManagersTab() {
     groupSources.forEach(function(src) { syncIncentiveRowsFromRecords(src); });
     var groupRows = DATA.incentiveRows.filter(function(r) { return groupSources.indexOf(r.source) >= 0; });
 
-    var platGroups = {};
-    groupRows.forEach(function(r) {
-      var p = platformOf(r.source);
-      if (!platGroups[p]) platGroups[p] = { count: 0, amount: 0, bonus: 0 };
-      platGroups[p].count++;
-      platGroups[p].amount += Number(r.amount) || 0;
-      platGroups[p].bonus += Number(r.bonus) || 0;
-    });
-    var PLATFORM_ORDER = ['X', 'Instagram', 'YouTube', 'TikTok', 'Threads', 'note', 'その他'];
-    var platKeys = Object.keys(platGroups).sort(function(a, b) { return PLATFORM_ORDER.indexOf(a) - PLATFORM_ORDER.indexOf(b); });
+    var groupTitleBase = currentIncentiveGroup === '__ALL__' ? '全体' : esc(currentIncentiveGroup) + ' 全体';
+    var groupMainHtml, groupHeadingHtml;
 
-    var gTotalCount = groupRows.length;
-    var gTotalAmount = groupRows.reduce(function(s, r) { return s + (Number(r.amount) || 0); }, 0);
-    var gTotalBonus = groupRows.reduce(function(s, r) { return s + (Number(r.bonus) || 0); }, 0);
+    if (currentIncentivePlatform) {
+      var platRowsData = groupRows.filter(function(r) { return getSourcePlatform(r.source) === currentIncentivePlatform; });
+      var thead2 = '<tr><th>アカウント</th>' + INCENTIVE_COLUMNS.map(function(c) { return '<th>' + esc(c.label) + '</th>'; }).join('') + '<th></th></tr>';
+      var bodyRows2 = platRowsData.map(function(r) {
+        var cells = INCENTIVE_COLUMNS.map(function(c) {
+          var val = esc(r[c.key] || '');
+          return '<td><input type="text" class="incentive-input" value="' + val + '" onchange="updateIncentiveCell(' + r.id + ',\'' + c.key + '\',this.value)"></td>';
+        }).join('');
+        var autoBadge = r.recordId ? '<span class="incentive-auto-badge" title="渡韓済のためインフルエンサータブから自動追加">自動</span>' : '';
+        return '<tr><td class="cat-label">' + esc(r.source) + '</td>' + cells + '<td>' + autoBadge + '<button class="incentive-del" onclick="deleteIncentiveRow(' + r.id + ')" title="削除">×</button></td></tr>';
+      }).join('');
+      groupMainHtml = '<button class="incentive-back-btn" onclick="backToIncentiveGroupSummary()">← 集計に戻る</button><div class="table-wrap"><table class="incentive-table"><thead>' + thead2 + '</thead><tbody>' + bodyRows2 + '</tbody></table></div>';
+      groupHeadingHtml = '<div class="incentive-head"><p class="incentive-title">' + groupTitleBase + '　' + esc(currentIncentivePlatform) + 'のインセンティブ表</p></div>';
+    } else {
+      var platGroups = {};
+      groupRows.forEach(function(r) {
+        var p = getSourcePlatform(r.source);
+        if (!platGroups[p]) platGroups[p] = { count: 0, amount: 0, bonus: 0 };
+        platGroups[p].count++;
+        platGroups[p].amount += Number(r.amount) || 0;
+        platGroups[p].bonus += Number(r.bonus) || 0;
+      });
+      var PLATFORM_ORDER = ['X', 'Instagram', 'YouTube', 'TikTok', 'Threads', 'note', 'その他'];
+      var platKeys = Object.keys(platGroups).sort(function(a, b) { return PLATFORM_ORDER.indexOf(a) - PLATFORM_ORDER.indexOf(b); });
 
-    var platRows = platKeys.map(function(p) {
-      var g = platGroups[p];
-      return '<tr><td class="cat-label">' + esc(p) + '</td><td class="num">' + g.count + '</td><td class="num">' + formatRevenue(g.amount) + '</td><td class="num">' + formatRevenue(g.bonus) + '</td></tr>';
-    }).join('');
+      var gTotalCount = groupRows.length;
+      var gTotalAmount = groupRows.reduce(function(s, r) { return s + (Number(r.amount) || 0); }, 0);
+      var gTotalBonus = groupRows.reduce(function(s, r) { return s + (Number(r.bonus) || 0); }, 0);
 
-    var groupMainHtml = platKeys.length === 0
-      ? '<p class="empty">まだ行がありません。左のアカウントを選んで「＋ 行追加」で入力を始められます。</p>'
-      : '<div class="table-wrap"><table class="incentive-table"><thead><tr><th>プラットフォーム</th><th>件数</th><th>金額合計</th><th>インセンティブ合計</th></tr></thead><tbody>' + platRows +
-        '<tr class="incentive-total-row"><td class="cat-label">合計</td><td class="num">' + gTotalCount + '</td><td class="num">' + formatRevenue(gTotalAmount) + '</td><td class="num">' + formatRevenue(gTotalBonus) + '</td></tr>' +
-        '</tbody></table></div>';
+      var platRows = platKeys.map(function(p) {
+        var g = platGroups[p];
+        var pArg = p.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        return '<tr><td class="cat-label">' + esc(p) + '</td><td class="num">' + g.count + '</td><td class="num">' + formatRevenue(g.amount) + '</td><td class="num">' + formatRevenue(g.bonus) + '</td><td><button class="incentive-detail-btn" onclick="showIncentivePlatform(\'' + pArg + '\')">詳細</button></td></tr>';
+      }).join('');
 
-    var groupTitleText = currentIncentiveGroup === '__ALL__' ? '全体（プラットフォーム別集計）' : (esc(currentIncentiveGroup) + ' 全体（プラットフォーム別集計）');
-    var groupHeadingHtml = '<div class="incentive-head"><p class="incentive-title">' + groupTitleText + '</p></div>';
+      groupMainHtml = platKeys.length === 0
+        ? '<p class="empty">まだ行がありません。左のアカウントを選んで「＋ 行追加」で入力を始められます。</p>'
+        : '<div class="table-wrap"><table class="incentive-table"><thead><tr><th>プラットフォーム</th><th>件数</th><th>金額合計</th><th>インセンティブ合計</th><th></th></tr></thead><tbody>' + platRows +
+          '<tr class="incentive-total-row"><td class="cat-label">合計</td><td class="num">' + gTotalCount + '</td><td class="num">' + formatRevenue(gTotalAmount) + '</td><td class="num">' + formatRevenue(gTotalBonus) + '</td><td></td></tr>' +
+          '</tbody></table></div>';
+      groupHeadingHtml = '<div class="incentive-head"><p class="incentive-title">' + groupTitleBase + '（プラットフォーム別集計）</p></div>';
+    }
+
     area.innerHTML = '<div class="snap-layout">' + sidebarHtml + '<div class="snap-main">' + groupHeadingHtml + groupMainHtml + '</div></div>';
     return;
   }

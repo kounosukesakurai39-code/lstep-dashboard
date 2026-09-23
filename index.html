@@ -457,6 +457,7 @@ var incentiveSubGroupOpen = {};
 var currentIncentiveMonth = null;
 var currentIncentiveGroup = null;
 var currentIncentivePlatform = null;
+var currentIncentiveGroupMonth = null;
 var incentiveSearchText = '';
 
 function filterIncentiveRows(list) {
@@ -2008,6 +2009,7 @@ function showIncentiveSource(name) {
   currentIncentiveGroup = null;
   currentIncentiveMonth = null;
   currentIncentivePlatform = null;
+  currentIncentiveGroupMonth = null;
   renderManagersTab();
 }
 
@@ -2043,6 +2045,7 @@ function toggleIncentiveSubGroup(name) {
   currentIncentiveSource = null;
   currentIncentiveMonth = null;
   currentIncentivePlatform = null;
+  currentIncentiveGroupMonth = null;
   renderManagersTab();
 }
 
@@ -2051,16 +2054,25 @@ function showIncentiveAll() {
   currentIncentiveSource = null;
   currentIncentiveMonth = null;
   currentIncentivePlatform = null;
+  currentIncentiveGroupMonth = null;
   renderManagersTab();
 }
 
 function showIncentivePlatform(platform) {
   currentIncentivePlatform = platform;
+  currentIncentiveGroupMonth = null;
+  renderManagersTab();
+}
+
+function showIncentiveGroupMonth(month) {
+  currentIncentiveGroupMonth = month;
+  currentIncentivePlatform = null;
   renderManagersTab();
 }
 
 function backToIncentiveGroupSummary() {
   currentIncentivePlatform = null;
+  currentIncentiveGroupMonth = null;
   renderManagersTab();
 }
 
@@ -2222,8 +2234,11 @@ function renderManagersTab() {
     var groupTitleBase = currentIncentiveGroup === '__ALL__' ? '全体' : esc(currentIncentiveGroup) + ' 全体';
     var groupMainHtml, groupHeadingHtml;
 
-    if (currentIncentivePlatform) {
-      var platRowsData = filterIncentiveRows(groupRows.filter(function(r) { return getSourcePlatform(r.source) === currentIncentivePlatform; }));
+    if (currentIncentivePlatform || currentIncentiveGroupMonth) {
+      var groupDetailRows = currentIncentivePlatform
+        ? groupRows.filter(function(r) { return getSourcePlatform(r.source) === currentIncentivePlatform; })
+        : groupRows.filter(function(r) { return (extractYearMonth(r.surgeryDate) || '未定') === currentIncentiveGroupMonth; });
+      var platRowsData = filterIncentiveRows(groupDetailRows);
       var thead2 = '<tr><th>アカウント</th>' + INCENTIVE_COLUMNS.map(function(c) { return '<th>' + esc(c.label) + '</th>'; }).join('') + '<th></th></tr>';
       var bodyRows2 = platRowsData.map(function(r) {
         var cells = INCENTIVE_COLUMNS.map(function(c) {
@@ -2234,7 +2249,8 @@ function renderManagersTab() {
         return '<tr><td class="cat-label">' + esc(r.source) + '</td>' + cells + '<td>' + autoBadge + '<button class="incentive-del" onclick="deleteIncentiveRow(' + r.id + ')" title="削除">×</button></td></tr>';
       }).join('');
       groupMainHtml = '<button class="incentive-back-btn" onclick="backToIncentiveGroupSummary()">← 集計に戻る</button>' + incentiveFilterBarHtml() + '<div class="table-wrap"><table class="incentive-table"><thead>' + thead2 + '</thead><tbody>' + bodyRows2 + '</tbody></table></div>';
-      groupHeadingHtml = '<div class="incentive-head"><p class="incentive-title">' + groupTitleBase + '　' + esc(currentIncentivePlatform) + 'のインセンティブ表</p></div>';
+      var detailLabel = currentIncentivePlatform || (currentIncentiveGroupMonth === '未定' ? '未定' : formatMonth(currentIncentiveGroupMonth));
+      groupHeadingHtml = '<div class="incentive-head"><p class="incentive-title">' + groupTitleBase + '　' + esc(detailLabel) + 'のインセンティブ表</p></div>';
     } else {
       var platGroups = {};
       groupRows.forEach(function(r) {
@@ -2258,12 +2274,37 @@ function renderManagersTab() {
         return '<tr><td class="cat-label">' + esc(p) + '</td><td class="num">' + g.count + '</td><td class="num">' + formatRevenue(g.amount) + '</td><td class="num">' + formatRevenue(g.bonus) + '</td><td><button class="incentive-detail-btn" onclick="showIncentivePlatform(\'' + pArg + '\')">詳細</button></td></tr>';
       }).join('');
 
-      groupMainHtml = platKeys.length === 0
+      var platTableHtml = '<div class="table-wrap"><table class="incentive-table"><thead><tr><th>プラットフォーム</th><th>件数</th><th>金額合計</th><th>インセンティブ合計</th><th></th></tr></thead><tbody>' + platRows +
+        '<tr class="incentive-total-row"><td class="cat-label">合計</td><td class="num">' + gTotalCount + '</td><td class="num">' + formatRevenue(gTotalAmount) + '</td><td class="num">' + formatRevenue(gTotalBonus) + '</td><td></td></tr>' +
+        '</tbody></table></div>';
+
+      var gMonthGroups = {};
+      groupRows.forEach(function(r) {
+        var ym = extractYearMonth(r.surgeryDate) || '未定';
+        if (!gMonthGroups[ym]) gMonthGroups[ym] = { count: 0, amount: 0, bonus: 0 };
+        gMonthGroups[ym].count++;
+        gMonthGroups[ym].amount += Number(r.amount) || 0;
+        gMonthGroups[ym].bonus += Number(r.bonus) || 0;
+      });
+      var gMonthKeys = Object.keys(gMonthGroups).filter(function(k) { return k !== '未定'; }).sort().reverse();
+      if (gMonthGroups['未定']) gMonthKeys.push('未定');
+
+      var monthRowsHtml = gMonthKeys.map(function(k) {
+        var g = gMonthGroups[k];
+        var kArg = k.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        var label = k === '未定' ? '未定' : formatMonth(k);
+        return '<tr><td class="cat-label">' + esc(label) + '</td><td class="num">' + g.count + '</td><td class="num">' + formatRevenue(g.amount) + '</td><td class="num">' + formatRevenue(g.bonus) + '</td><td><button class="incentive-detail-btn" onclick="showIncentiveGroupMonth(\'' + kArg + '\')">詳細</button></td></tr>';
+      }).join('');
+
+      var monthTableHtml = gMonthKeys.length === 0 ? '' :
+        '<div class="table-wrap" style="margin-top:20px"><table class="incentive-table"><thead><tr><th>手術月</th><th>件数</th><th>金額合計</th><th>インセンティブ合計</th><th></th></tr></thead><tbody>' + monthRowsHtml +
+        '<tr class="incentive-total-row"><td class="cat-label">合計</td><td class="num">' + gTotalCount + '</td><td class="num">' + formatRevenue(gTotalAmount) + '</td><td class="num">' + formatRevenue(gTotalBonus) + '</td><td></td></tr>' +
+        '</tbody></table></div>';
+
+      groupMainHtml = groupRows.length === 0
         ? '<p class="empty">まだ行がありません。左のアカウントを選んで「＋ 行追加」で入力を始められます。</p>'
-        : '<div class="table-wrap"><table class="incentive-table"><thead><tr><th>プラットフォーム</th><th>件数</th><th>金額合計</th><th>インセンティブ合計</th><th></th></tr></thead><tbody>' + platRows +
-          '<tr class="incentive-total-row"><td class="cat-label">合計</td><td class="num">' + gTotalCount + '</td><td class="num">' + formatRevenue(gTotalAmount) + '</td><td class="num">' + formatRevenue(gTotalBonus) + '</td><td></td></tr>' +
-          '</tbody></table></div>';
-      groupHeadingHtml = '<div class="incentive-head"><p class="incentive-title">' + groupTitleBase + '（プラットフォーム別集計）</p></div>';
+        : platTableHtml + monthTableHtml;
+      groupHeadingHtml = '<div class="incentive-head"><p class="incentive-title">' + groupTitleBase + '（プラットフォーム別・手術月別集計）</p></div>';
     }
 
     area.innerHTML = '<div class="snap-layout">' + sidebarHtml + '<div class="snap-main">' + groupHeadingHtml + groupMainHtml + '</div></div>';

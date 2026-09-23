@@ -106,6 +106,10 @@
   .incentive-filter-bar { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; }
   .incentive-search-input { padding: 7px 12px; border: 1px solid #d5dee8; border-radius: 8px; font-size: 0.85em; width: 220px; color: #1f2b3d; }
   .incentive-search-input:focus { outline: none; border-color: #14548a; }
+  .incentive-view-tabs { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid #e5eaf0; }
+  .incentive-view-tab { border: none; background: transparent; color: #8494a8; font-size: 0.85em; font-weight: 500; padding: 8px 14px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .incentive-view-tab:hover { color: #163a5c; }
+  .incentive-view-tab.active { color: #14548a; border-bottom-color: #14548a; font-weight: 700; }
 
   .chart-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
   .chart-box { background: #fff; border: 1px solid #e5eaf0; border-radius: 10px; padding: 16px; flex: 1; min-width: 300px; }
@@ -458,6 +462,12 @@ var currentIncentiveMonth = null;
 var currentIncentiveGroup = null;
 var currentIncentivePlatform = null;
 var currentIncentiveGroupMonth = null;
+var incentiveSummaryView = 'platform';
+
+function setIncentiveSummaryView(view) {
+  incentiveSummaryView = view;
+  renderManagersTab();
+}
 var incentiveSearchText = '';
 
 function filterIncentiveRows(list) {
@@ -2296,15 +2306,19 @@ function renderManagersTab() {
         return '<tr><td class="cat-label">' + esc(label) + '</td><td class="num">' + g.count + '</td><td class="num">' + formatRevenue(g.amount) + '</td><td class="num">' + formatRevenue(g.bonus) + '</td><td><button class="incentive-detail-btn" onclick="showIncentiveGroupMonth(\'' + kArg + '\')">詳細</button></td></tr>';
       }).join('');
 
-      var monthTableHtml = gMonthKeys.length === 0 ? '' :
-        '<div class="table-wrap" style="margin-top:20px"><table class="incentive-table"><thead><tr><th>手術月</th><th>件数</th><th>金額合計</th><th>インセンティブ合計</th><th></th></tr></thead><tbody>' + monthRowsHtml +
+      var monthTableHtml = '<div class="table-wrap"><table class="incentive-table"><thead><tr><th>手術月</th><th>件数</th><th>金額合計</th><th>インセンティブ合計</th><th></th></tr></thead><tbody>' + monthRowsHtml +
         '<tr class="incentive-total-row"><td class="cat-label">合計</td><td class="num">' + gTotalCount + '</td><td class="num">' + formatRevenue(gTotalAmount) + '</td><td class="num">' + formatRevenue(gTotalBonus) + '</td><td></td></tr>' +
         '</tbody></table></div>';
 
+      var summaryTabsHtml = '<div class="incentive-view-tabs">' +
+        '<button class="incentive-view-tab' + (incentiveSummaryView !== 'month' ? ' active' : '') + '" onclick="setIncentiveSummaryView(\'platform\')">プラットフォーム別</button>' +
+        '<button class="incentive-view-tab' + (incentiveSummaryView === 'month' ? ' active' : '') + '" onclick="setIncentiveSummaryView(\'month\')">手術月別</button>' +
+        '</div>';
+
       groupMainHtml = groupRows.length === 0
         ? '<p class="empty">まだ行がありません。左のアカウントを選んで「＋ 行追加」で入力を始められます。</p>'
-        : platTableHtml + monthTableHtml;
-      groupHeadingHtml = '<div class="incentive-head"><p class="incentive-title">' + groupTitleBase + '（プラットフォーム別・手術月別集計）</p></div>';
+        : summaryTabsHtml + (incentiveSummaryView === 'month' ? monthTableHtml : platTableHtml);
+      groupHeadingHtml = '<div class="incentive-head"><p class="incentive-title">' + groupTitleBase + '（集計）</p></div>';
     }
 
     area.innerHTML = '<div class="snap-layout">' + sidebarHtml + '<div class="snap-main">' + groupHeadingHtml + groupMainHtml + '</div></div>';

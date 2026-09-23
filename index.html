@@ -1989,11 +1989,18 @@ function backToIncentiveSummary() {
 
 function extractYearMonth(str) {
   if (!str) return null;
-  var m = String(str).match(/(\d{4})[^\d]{0,2}(\d{1,2})/);
-  if (!m) return null;
-  var mm = m[2].length === 1 ? '0' + m[2] : m[2];
-  if (mm < '01' || mm > '12') return null;
-  return m[1] + '-' + mm;
+  var s = String(str).trim();
+  var m = s.match(/(\d{4})[^\d]{0,3}(\d{1,2})/);
+  if (m) {
+    var mm = m[2].length === 1 ? '0' + m[2] : m[2];
+    if (mm >= '01' && mm <= '12') return m[1] + '-' + mm;
+  }
+  var m2 = s.match(/^(\d{1,2})[月\/\-.]/);
+  if (m2) {
+    var mm2 = m2[1].length === 1 ? '0' + m2[1] : m2[1];
+    if (mm2 >= '01' && mm2 <= '12') return new Date().getFullYear() + '-' + mm2;
+  }
+  return null;
 }
 
 function toggleIncentiveSubGroup(name) {

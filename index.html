@@ -81,7 +81,7 @@
   .pw-gate-btn:hover { background: #0f4373; }
   .pw-gate-error { font-size: 0.78em; color: #c0304a; min-height: 1em; }
 
-  .incentive-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .incentive-head { display: flex; align-items: center; margin-bottom: 14px; }
   .incentive-title { font-size: 0.95em; font-weight: 600; color: #163a5c; margin: 0; }
   .incentive-add { background: #1f8a4c; color: #fff; border: none; border-radius: 8px; padding: 8px 14px; font-size: 0.85em; font-weight: 600; cursor: pointer; }
   .incentive-add:hover { background: #196e3d; }
@@ -92,6 +92,12 @@
   .incentive-input:focus { outline: 2px solid #14548a; outline-offset: -2px; background: #f4f8fc; }
   .incentive-del { border: none; background: transparent; color: #b0bdcc; font-size: 1em; cursor: pointer; padding: 8px 10px; }
   .incentive-del:hover { color: #c0304a; }
+  .incentive-head { gap: 14px; flex-wrap: wrap; }
+  .incentive-title { margin-right: auto; }
+  .incentive-rate { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85em; color: #55677e; font-weight: 500; }
+  .incentive-rate-input { width: 56px; padding: 6px 8px; border: 1px solid #d5dee8; border-radius: 6px; font: inherit; text-align: right; color: #1f2b3d; }
+  .incentive-rate-input:focus { outline: none; border-color: #14548a; }
+  .incentive-auto-badge { font-size: 0.7em; color: #1f8a4c; background: #e7f6ec; border-radius: 5px; padding: 2px 6px; margin-right: 4px; white-space: nowrap; }
 
   .chart-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
   .chart-box { background: #fff; border: 1px solid #e5eaf0; border-radius: 10px; padding: 16px; flex: 1; min-width: 300px; }
@@ -397,7 +403,7 @@ var SUPABASE_ANON_KEY = 'sb_publishable_wAsepmixI4NC16C59B6kbA_RmxzoZ7H';
 var SUPABASE_TABLE_URL = SUPABASE_URL + '/rest/v1/app_data?id=eq.1';
 var SUPABASE_HEADERS = { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY };
 
-var DATA = { records: [], sources: [], statuses: [], venues: [], areas: [], nextId: 1, snapshots: [], nextSnapshotId: 1, incentiveRows: [], nextIncentiveId: 1 };
+var DATA = { records: [], sources: [], statuses: [], venues: [], areas: [], nextId: 1, snapshots: [], nextSnapshotId: 1, incentiveRows: [], nextIncentiveId: 1, incentiveRates: {} };
 var currentSnapshotBusiness = null;
 var expandedGroups = {};
 var expandedAggDetails = {};
@@ -660,6 +666,7 @@ function reload() {
       DATA.nextSnapshotId = rec.nextSnapshotId || (DATA.snapshots.length + 1);
       DATA.incentiveRows = Array.isArray(rec.incentiveRows) ? rec.incentiveRows : [];
       DATA.nextIncentiveId = rec.nextIncentiveId || (DATA.incentiveRows.length + 1);
+      DATA.incentiveRates = (rec.incentiveRates && typeof rec.incentiveRates === 'object') ? rec.incentiveRates : {};
       populateFilters();
       renderList();
       showTab('chart');
@@ -1994,7 +2001,40 @@ function updateIncentiveCell(id, field, value) {
   var row = DATA.incentiveRows.find(function(r) { return r.id === id; });
   if (!row) return;
   row[field] = value;
+  if (field === 'amount' && !row.bonus) {
+    var rate = Number(DATA.incentiveRates[row.source]);
+    var amount = Number(value);
+    if (rate && amount) row.bonus = String(Math.round(amount * rate / 100));
+  }
   save();
+  renderManagersTab();
+}
+
+function updateIncentiveRate(value) {
+  if (!currentIncentiveSource) return;
+  if (value === '') delete DATA.incentiveRates[currentIncentiveSource];
+  else DATA.incentiveRates[currentIncentiveSource] = value;
+  save();
+}
+
+function syncIncentiveRowsFromRecords(source) {
+  var linkedRecordIds = {};
+  DATA.incentiveRows.forEach(function(r) { if (r.source === source && r.recordId) linkedRecordIds[r.recordId] = true; });
+  var traveled = DATA.records.filter(function(r) { return r.source === source && isTravelStatus(r.status); });
+  var added = false;
+  traveled.forEach(function(rec) {
+    if (linkedRecordIds[rec.id]) return;
+    var row = { id: DATA.nextIncentiveId++, source: source, recordId: rec.id };
+    INCENTIVE_COLUMNS.forEach(function(c) { row[c.key] = ''; });
+    row.join = rec.registeredAt || '';
+    row.name = rec.name || '';
+    row.region = rec.location || '';
+    row.hospital = rec.surgeryVenue || rec.consultationVenue || '';
+    row.amount = rec.revenue || '';
+    DATA.incentiveRows.push(row);
+    added = true;
+  });
+  if (added) save();
 }
 
 function deleteIncentiveRow(id) {
@@ -2076,6 +2116,7 @@ function renderManagersTab() {
     return;
   }
 
+  syncIncentiveRowsFromRecords(currentIncentiveSource);
   var rows = DATA.incentiveRows.filter(function(r) { return r.source === currentIncentiveSource; });
 
   var thead = '<tr>' + INCENTIVE_COLUMNS.map(function(c) { return '<th>' + esc(c.label) + '</th>'; }).join('') + '<th></th></tr>';
@@ -2084,11 +2125,14 @@ function renderManagersTab() {
       var val = esc(r[c.key] || '');
       return '<td><input type="text" class="incentive-input" value="' + val + '" onchange="updateIncentiveCell(' + r.id + ',\'' + c.key + '\',this.value)"></td>';
     }).join('');
-    return '<tr>' + cells + '<td><button class="incentive-del" onclick="deleteIncentiveRow(' + r.id + ')" title="削除">×</button></td></tr>';
+    var autoBadge = r.recordId ? '<span class="incentive-auto-badge" title="渡韓済のためインフルエンサータブから自動追加">自動</span>' : '';
+    return '<tr>' + cells + '<td>' + autoBadge + '<button class="incentive-del" onclick="deleteIncentiveRow(' + r.id + ')" title="削除">×</button></td></tr>';
   }).join('');
 
   var tableHtml = '<div class="table-wrap"><table class="incentive-table"><thead>' + thead + '</thead><tbody>' + bodyRows + '</tbody></table></div>';
-  var headingHtml = '<div class="incentive-head"><p class="incentive-title">' + esc(currentIncentiveSource) + ' のインセンティブ表</p><button class="incentive-add" onclick="addIncentiveRow()">＋ 行追加</button></div>';
+  var rateVal = esc(DATA.incentiveRates[currentIncentiveSource] || '');
+  var rateHtml = '<span class="incentive-rate">歩合 <input type="number" class="incentive-rate-input" value="' + rateVal + '" placeholder="0" onchange="updateIncentiveRate(this.value)">%</span>';
+  var headingHtml = '<div class="incentive-head"><p class="incentive-title">' + esc(currentIncentiveSource) + ' のインセンティブ表</p>' + rateHtml + '<button class="incentive-add" onclick="addIncentiveRow()">＋ 行追加</button></div>';
 
   area.innerHTML = '<div class="snap-layout">' + sidebarHtml + '<div class="snap-main">' + headingHtml + tableHtml + '</div></div>';
 }

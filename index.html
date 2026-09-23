@@ -68,6 +68,8 @@
   .kpi-card { flex: 1; min-width: 140px; background: #fff; border: 1px solid #e5eaf0; border-radius: 10px; padding: 16px; text-align: center; }
   .kpi-card .val { font-size: 1.6em; font-weight: bold; color: #1a6090; }
   .kpi-card .label { font-size: 0.78em; color: #7088a0; margin-top: 4px; }
+  .kpi-card.kpi-clickable { cursor: pointer; transition: border-color .12s ease, box-shadow .12s ease; }
+  .kpi-card.kpi-clickable:hover { border-color: #8fb4d4; box-shadow: 0 2px 6px rgba(20,84,138,0.1); }
 
   .chart-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
   .chart-box { background: #fff; border: 1px solid #e5eaf0; border-radius: 10px; padding: 16px; flex: 1; min-width: 300px; }
@@ -567,14 +569,14 @@ function renderInfluencerPanel() {
   var totalRevenue = list.reduce(function(sum, r) { return sum + (Number(r.revenue) || 0); }, 0);
 
   document.getElementById('influencerKpiRow').innerHTML =
-    kpiCard(total, '総登録数') +
-    kpiCard(booked, '相談会予約数') +
-    kpiCard(total ? Math.round(booked/total*100) + '%' : '-', '予約率') +
-    kpiCard(closed, '成約数') +
-    kpiCard(total ? Math.round(closed/total*100) + '%' : '-', '成約率');
+    kpiCard(total, '総登録数', 'all') +
+    kpiCard(booked, '相談会予約数', 'booked') +
+    kpiCard(total ? Math.round(booked/total*100) + '%' : '-', '予約率', 'booked') +
+    kpiCard(closed, '成約数', 'closed') +
+    kpiCard(total ? Math.round(closed/total*100) + '%' : '-', '成約率', 'closed');
   document.getElementById('influencerKpiRow2').innerHTML =
-    kpiCard(total ? Math.round(traveled/total*100) + '%' : '-', '渡韓率') +
-    kpiCard(traveled, '渡韓数') +
+    kpiCard(total ? Math.round(traveled/total*100) + '%' : '-', '渡韓率', 'travel') +
+    kpiCard(traveled, '渡韓数', 'travel') +
     kpiCard(formatRevenue(totalRevenue) || '₩0', '売上合計');
 
   document.getElementById('influencerSearchInput').value = '';
@@ -938,8 +940,26 @@ function renderCharts() {
   });
 }
 
-function kpiCard(val, label) {
-  return '<div class="kpi-card"><div class="val">' + val + '</div><div class="label">' + label + '</div></div>';
+function kpiCard(val, label, kind) {
+  if (!kind) return '<div class="kpi-card"><div class="val">' + val + '</div><div class="label">' + label + '</div></div>';
+  return '<div class="kpi-card kpi-clickable" onclick="applyInfluencerKpiFilter(\'' + kind + '\')"><div class="val">' + val + '</div><div class="label">' + label + '</div></div>';
+}
+
+function applyInfluencerKpiFilter(kind) {
+  if (kind === 'all') {
+    influencerStatusFilters = [];
+  } else {
+    influencerStatusFilters = DATA.statuses.filter(function(s) {
+      if (kind === 'travel') return isTravelStatus(s);
+      if (kind === 'closed') return isClosedStatus(s);
+      if (kind === 'booked') return isBookedStatus(s);
+      return false;
+    });
+  }
+  renderInfluencerStatusChips();
+  renderInfluencerFilteredList();
+  var area = document.getElementById('influencerListArea');
+  if (area) area.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // ── CSV取込 ──────────────────────────────────────────

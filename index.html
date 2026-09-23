@@ -2245,7 +2245,8 @@ function renderManagersTab() {
         platGroups[p].bonus += Number(r.bonus) || 0;
       });
       var PLATFORM_ORDER = ['X', 'Instagram', 'YouTube', 'TikTok', 'Threads', 'note', 'その他'];
-      var platKeys = Object.keys(platGroups).sort(function(a, b) { return PLATFORM_ORDER.indexOf(a) - PLATFORM_ORDER.indexOf(b); });
+      PLATFORM_ORDER.forEach(function(p) { if (!platGroups[p]) platGroups[p] = { count: 0, amount: 0, bonus: 0 }; });
+      var platKeys = PLATFORM_ORDER.slice();
 
       var gTotalCount = groupRows.length;
       var gTotalAmount = groupRows.reduce(function(s, r) { return s + (Number(r.amount) || 0); }, 0);

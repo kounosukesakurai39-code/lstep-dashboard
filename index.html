@@ -2161,27 +2161,30 @@ function renderManagersTab() {
     var monthGroups = {};
     rows.forEach(function(r) {
       var ym = extractYearMonth(r.surgeryDate) || '未定';
-      if (!monthGroups[ym]) monthGroups[ym] = { count: 0, amount: 0 };
+      if (!monthGroups[ym]) monthGroups[ym] = { count: 0, amount: 0, bonus: 0 };
       monthGroups[ym].count++;
       monthGroups[ym].amount += Number(r.amount) || 0;
+      monthGroups[ym].bonus += Number(r.bonus) || 0;
     });
     var monthKeys = Object.keys(monthGroups).filter(function(k) { return k !== '未定'; }).sort().reverse();
     if (monthGroups['未定']) monthKeys.push('未定');
 
     var totalCount = rows.length;
     var totalAmount = rows.reduce(function(s, r) { return s + (Number(r.amount) || 0); }, 0);
+    var totalBonus = rows.reduce(function(s, r) { return s + (Number(r.bonus) || 0); }, 0);
 
     var summaryRows = monthKeys.map(function(k) {
       var g = monthGroups[k];
+      var kArg = k.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       var label = k === '未定' ? '未定' : formatMonth(k);
-      return '<tr><td class="cat-label">' + esc(label) + '</td><td class="num">' + g.count + '</td><td class="num">' + formatRevenue(g.amount) + '</td></tr>';
+      return '<tr><td class="cat-label">' + esc(label) + '</td><td class="num">' + g.count + '</td><td class="num">' + formatRevenue(g.amount) + '</td><td class="num">' + formatRevenue(g.bonus) + '</td><td><button class="incentive-detail-btn" onclick="showIncentiveMonth(\'' + kArg + '\')">詳細</button></td></tr>';
     }).join('');
 
     if (monthKeys.length === 0) {
       mainHtml = '<p class="empty">まだ行がありません。「＋ 行追加」で入力を始められます。</p>';
     } else {
-      mainHtml = '<div class="table-wrap"><table class="incentive-table"><thead><tr><th>手術月</th><th>件数</th><th>金額合計</th></tr></thead><tbody>' + summaryRows +
-        '<tr class="incentive-total-row"><td class="cat-label">合計</td><td class="num">' + totalCount + '</td><td class="num">' + formatRevenue(totalAmount) + '</td></tr>' +
+      mainHtml = '<div class="table-wrap"><table class="incentive-table"><thead><tr><th>手術月</th><th>件数</th><th>金額合計</th><th>インセンティブ合計</th><th></th></tr></thead><tbody>' + summaryRows +
+        '<tr class="incentive-total-row"><td class="cat-label">合計</td><td class="num">' + totalCount + '</td><td class="num">' + formatRevenue(totalAmount) + '</td><td class="num">' + formatRevenue(totalBonus) + '</td><td></td></tr>' +
         '</tbody></table></div>';
     }
   } else {

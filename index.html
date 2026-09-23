@@ -81,6 +81,18 @@
   .pw-gate-btn:hover { background: #0f4373; }
   .pw-gate-error { font-size: 0.78em; color: #c0304a; min-height: 1em; }
 
+  .incentive-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .incentive-title { font-size: 0.95em; font-weight: 600; color: #163a5c; margin: 0; }
+  .incentive-add { background: #1f8a4c; color: #fff; border: none; border-radius: 8px; padding: 8px 14px; font-size: 0.85em; font-weight: 600; cursor: pointer; }
+  .incentive-add:hover { background: #196e3d; }
+  .incentive-table { border-collapse: collapse; font-size: 0.85em; background: #fff; }
+  .incentive-table th, .incentive-table td { border: 1px solid #d9e0ea; padding: 0; }
+  .incentive-table th { background: #eaf2f9; color: #163a5c; font-weight: 600; padding: 8px 10px; white-space: nowrap; }
+  .incentive-input { width: 130px; border: none; background: transparent; padding: 8px 10px; font: inherit; color: #1f2b3d; }
+  .incentive-input:focus { outline: 2px solid #14548a; outline-offset: -2px; background: #f4f8fc; }
+  .incentive-del { border: none; background: transparent; color: #b0bdcc; font-size: 1em; cursor: pointer; padding: 8px 10px; }
+  .incentive-del:hover { color: #c0304a; }
+
   .chart-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
   .chart-box { background: #fff; border: 1px solid #e5eaf0; border-radius: 10px; padding: 16px; flex: 1; min-width: 300px; }
   .chart-box h3 { font-size: 0.9em; color: #1a6090; margin-bottom: 12px; }
@@ -385,7 +397,7 @@ var SUPABASE_ANON_KEY = 'sb_publishable_wAsepmixI4NC16C59B6kbA_RmxzoZ7H';
 var SUPABASE_TABLE_URL = SUPABASE_URL + '/rest/v1/app_data?id=eq.1';
 var SUPABASE_HEADERS = { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY };
 
-var DATA = { records: [], sources: [], statuses: [], venues: [], areas: [], nextId: 1, snapshots: [], nextSnapshotId: 1 };
+var DATA = { records: [], sources: [], statuses: [], venues: [], areas: [], nextId: 1, snapshots: [], nextSnapshotId: 1, incentiveRows: [], nextIncentiveId: 1 };
 var currentSnapshotBusiness = null;
 var expandedGroups = {};
 var expandedAggDetails = {};
@@ -425,7 +437,8 @@ function togglePlatformDetail(key) {
   expandedPlatformDetails[key] = !expandedPlatformDetails[key];
   renderSnapshotTable();
 }
-var currentManagerPerson = null;
+var currentIncentiveSource = null;
+var incentiveSubGroupOpen = {};
 var editingId = null;
 var currentSurgeryAreas = [];
 var influencerStatusFilters = [];
@@ -645,6 +658,8 @@ function reload() {
       DATA.nextId = rec.nextId || (DATA.records.length + 1);
       DATA.snapshots = Array.isArray(rec.snapshots) ? rec.snapshots : [];
       DATA.nextSnapshotId = rec.nextSnapshotId || (DATA.snapshots.length + 1);
+      DATA.incentiveRows = Array.isArray(rec.incentiveRows) ? rec.incentiveRows : [];
+      DATA.nextIncentiveId = rec.nextIncentiveId || (DATA.incentiveRows.length + 1);
       populateFilters();
       renderList();
       showTab('chart');
@@ -1943,21 +1958,51 @@ function renderSnapshotTable() {
   if (newWrap) { newWrap.scrollLeft = prevScrollLeft; newWrap.scrollTop = prevScrollTop; }
 }
 
-function showManagerTab(person) {
-  currentManagerPerson = person;
+function showIncentiveSource(name) {
+  currentIncentiveSource = name;
   renderManagersTab();
 }
 
-var SOURCE_PERSON_MAP = {
-  'おしおさん': '村上',
-  '梅村X': 'コウノスケ',
-  'よしえオンニインスタグラム（原川）': '原川',
-  'よしえオンニyoutubeショート（原川）': '原川',
-  '藤原 X': '藤原',
-  '藤原 note': '藤原',
-  '藤原 youtube': '藤原',
-  '深町 X': '深町'
-};
+function toggleIncentiveSubGroup(name) {
+  incentiveSubGroupOpen[name] = !incentiveSubGroupOpen[name];
+  renderManagersTab();
+}
+
+var INCENTIVE_COLUMNS = [
+  { key: 'join', label: '参加日' },
+  { key: 'hospital', label: '病院' },
+  { key: 'region', label: '地域' },
+  { key: 'customerNo', label: '顧客番号' },
+  { key: 'name', label: '名前' },
+  { key: 'travelDate', label: '渡韓予定日' },
+  { key: 'surgeryDate', label: '手術日' },
+  { key: 'amount', label: '金額' },
+  { key: 'bonus', label: '賞与' },
+  { key: 'payment', label: '支払い' }
+];
+
+function addIncentiveRow() {
+  if (!currentIncentiveSource) return;
+  var row = { id: DATA.nextIncentiveId++, source: currentIncentiveSource };
+  INCENTIVE_COLUMNS.forEach(function(c) { row[c.key] = ''; });
+  DATA.incentiveRows.push(row);
+  save();
+  renderManagersTab();
+}
+
+function updateIncentiveCell(id, field, value) {
+  var row = DATA.incentiveRows.find(function(r) { return r.id === id; });
+  if (!row) return;
+  row[field] = value;
+  save();
+}
+
+function deleteIncentiveRow(id) {
+  if (!confirm('この行を削除しますか？')) return;
+  DATA.incentiveRows = DATA.incentiveRows.filter(function(r) { return r.id !== id; });
+  save();
+  renderManagersTab();
+}
 
 var MANAGERS_PASSWORD = 'sakurai';
 var managersUnlocked = (localStorage.getItem('managersUnlocked') === '1');
@@ -1993,55 +2038,59 @@ function checkManagersPassword() {
 
 function renderManagersTab() {
   var area = document.getElementById('managersArea');
-  var persons = [];
-  Object.keys(SOURCE_PERSON_MAP).forEach(function(src) {
-    var p = SOURCE_PERSON_MAP[src];
-    if (persons.indexOf(p) < 0) persons.push(p);
+  var memberToGroup = {};
+  Object.keys(INFLUENCER_GROUPS).forEach(function(g) {
+    INFLUENCER_GROUPS[g].forEach(function(m) {
+      memberToGroup[m] = g;
+      if (currentIncentiveSource === m) incentiveSubGroupOpen[g] = true;
+    });
   });
-  persons.sort(function(a, b) { return a.localeCompare(b, 'ja'); });
 
-  if (persons.length === 0) {
-    area.innerHTML = '<p class="empty">担当者が設定されたインフルエンサーがありません。</p>';
+  var renderedGroups = {};
+  var sidebarItems = [];
+  DATA.sources.forEach(function(name) {
+    var group = memberToGroup[name];
+    if (group) {
+      if (renderedGroups[group]) return;
+      renderedGroups[group] = true;
+      var isOpen = !!incentiveSubGroupOpen[group];
+      var gArg = group.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      sidebarItems.push('<button class="snap-nav-sub-group" onclick="toggleIncentiveSubGroup(\'' + gArg + '\')"><span>' + (isOpen ? '▼' : '▶') + '</span><span>' + esc(group) + '</span><span class="count">(' + INFLUENCER_GROUPS[group].length + ')</span></button>');
+      if (isOpen) {
+        INFLUENCER_GROUPS[group].forEach(function(sub) {
+          var subArg = sub.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+          var isSel = currentIncentiveSource === sub;
+          sidebarItems.push('<button class="snap-nav-sub2' + (isSel ? ' active' : '') + '" onclick="showIncentiveSource(\'' + subArg + '\')">' + esc(sub) + '</button>');
+        });
+      }
+    } else {
+      var arg = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      var isSel2 = currentIncentiveSource === name;
+      sidebarItems.push('<button class="snap-nav-item' + (isSel2 ? ' active' : '') + '" onclick="showIncentiveSource(\'' + arg + '\')">' + esc(name) + '</button>');
+    }
+  });
+  var sidebarHtml = '<div class="snap-sidebar">' + sidebarItems.join('') + '</div>';
+
+  if (!currentIncentiveSource) {
+    area.innerHTML = '<div class="snap-layout">' + sidebarHtml + '<div class="snap-main"><p class="empty">左からインフルエンサーを選んでください。</p></div></div>';
     return;
   }
-  if (currentManagerPerson && persons.indexOf(currentManagerPerson) < 0) currentManagerPerson = null;
 
-  var sidebarHtml = '<div class="snap-sidebar">' + persons.map(function(p) {
-    var arg = p.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    var isSel = currentManagerPerson === p;
-    return '<button class="snap-nav-item' + (isSel ? ' active' : '') + '" onclick="showManagerTab(\'' + arg + '\')">' + esc(p) + '</button>';
-  }).join('') + '</div>';
+  var rows = DATA.incentiveRows.filter(function(r) { return r.source === currentIncentiveSource; });
 
-  if (!currentManagerPerson) {
-    area.innerHTML = '<div class="snap-layout">' + sidebarHtml + '<div class="snap-main"><p class="empty">左から担当者を選んでください。</p></div></div>';
-    return;
-  }
+  var thead = '<tr>' + INCENTIVE_COLUMNS.map(function(c) { return '<th>' + esc(c.label) + '</th>'; }).join('') + '<th></th></tr>';
+  var bodyRows = rows.map(function(r) {
+    var cells = INCENTIVE_COLUMNS.map(function(c) {
+      var val = esc(r[c.key] || '');
+      return '<td><input type="text" class="incentive-input" value="' + val + '" onchange="updateIncentiveCell(' + r.id + ',\'' + c.key + '\',this.value)"></td>';
+    }).join('');
+    return '<tr>' + cells + '<td><button class="incentive-del" onclick="deleteIncentiveRow(' + r.id + ')" title="削除">×</button></td></tr>';
+  }).join('');
 
-  var sources = Object.keys(SOURCE_PERSON_MAP).filter(function(src) { return SOURCE_PERSON_MAP[src] === currentManagerPerson; });
-  var list = DATA.records.filter(function(r) { return sources.indexOf(r.source) >= 0; });
-  list.sort(function(a, b) { return (b.registeredAt || '').localeCompare(a.registeredAt || ''); });
+  var tableHtml = '<div class="table-wrap"><table class="incentive-table"><thead>' + thead + '</thead><tbody>' + bodyRows + '</tbody></table></div>';
+  var headingHtml = '<div class="incentive-head"><p class="incentive-title">' + esc(currentIncentiveSource) + ' のインセンティブ表</p><button class="incentive-add" onclick="addIncentiveRow()">＋ 行追加</button></div>';
 
-  var total = list.filter(function(r) { return r.status !== 'ブロック'; }).length;
-  var booked = list.filter(function(r) { return isBookedStatus(r.status); }).length;
-  var closed = list.filter(function(r) { return isClosedStatus(r.status); }).length;
-  var traveled = list.filter(function(r) { return isTravelStatus(r.status); }).length;
-  var totalRevenue = list.reduce(function(sum, r) { return sum + (Number(r.revenue) || 0); }, 0);
-
-  var kpiHtml = '<div class="kpi-row">' +
-    kpiCard(total, '総登録数') +
-    kpiCard(booked, '相談会予約数') +
-    kpiCard(total ? Math.round(booked / total * 100) + '%' : '-', '予約率') +
-    kpiCard(closed, '成約数') +
-    kpiCard(total ? Math.round(closed / total * 100) + '%' : '-', '成約率') +
-  '</div><div class="kpi-row">' +
-    kpiCard(total ? Math.round(traveled / total * 100) + '%' : '-', '渡韓率') +
-    kpiCard(traveled, '渡韓数') +
-    kpiCard(formatRevenue(totalRevenue) || '₩0', '売上合計') +
-  '</div>';
-
-  var headingHtml = '<p style="font-size:0.8em;color:#7088a0;margin-bottom:12px">担当アカウント: ' + sources.map(esc).join('、') + '（' + list.length + '件）</p>';
-
-  area.innerHTML = '<div class="snap-layout">' + sidebarHtml + '<div class="snap-main">' + headingHtml + kpiHtml + buildTableHtml(list) + '</div></div>';
+  area.innerHTML = '<div class="snap-layout">' + sidebarHtml + '<div class="snap-main">' + headingHtml + tableHtml + '</div></div>';
 }
 
 // 初期化

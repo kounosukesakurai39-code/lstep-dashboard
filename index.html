@@ -426,8 +426,6 @@ function togglePlatformDetail(key) {
   renderSnapshotTable();
 }
 var currentManagerPerson = null;
-var currentManagerCategory = null;
-var currentManagerPlatforms = [];
 var editingId = null;
 var currentSurgeryAreas = [];
 var influencerStatusFilters = [];
@@ -1947,22 +1945,19 @@ function renderSnapshotTable() {
 
 function showManagerTab(person) {
   currentManagerPerson = person;
-  currentManagerCategory = null;
-  currentManagerPlatforms = [];
   renderManagersTab();
 }
 
-function setManagerCategory(category) {
-  currentManagerCategory = category;
-  renderManagersTab();
-}
-
-function toggleManagerPlatform(platform) {
-  var idx = currentManagerPlatforms.indexOf(platform);
-  if (idx >= 0) currentManagerPlatforms.splice(idx, 1);
-  else currentManagerPlatforms.push(platform);
-  renderManagersTab();
-}
+var SOURCE_PERSON_MAP = {
+  'おしおさん': '村上',
+  '梅村X': 'コウノスケ',
+  'よしえオンニインスタグラム（原川）': '原川',
+  'よしえオンニyoutubeショート（原川）': '原川',
+  '藤原 X': '藤原',
+  '藤原 note': '藤原',
+  '藤原 youtube': '藤原',
+  '深町 X': '深町'
+};
 
 var MANAGERS_PASSWORD = 'sakurai';
 var managersUnlocked = (localStorage.getItem('managersUnlocked') === '1');
@@ -1998,36 +1993,23 @@ function checkManagersPassword() {
 
 function renderManagersTab() {
   var area = document.getElementById('managersArea');
-  var rows = DATA.snapshots.filter(function(s) { return s.group === 'SNS' && (s.business === 'Navi' || s.business === '江南') && s.person; });
-
   var persons = [];
-  rows.forEach(function(s) { if (persons.indexOf(s.person) < 0) persons.push(s.person); });
+  Object.keys(SOURCE_PERSON_MAP).forEach(function(src) {
+    var p = SOURCE_PERSON_MAP[src];
+    if (persons.indexOf(p) < 0) persons.push(p);
+  });
   persons.sort(function(a, b) { return a.localeCompare(b, 'ja'); });
 
   if (persons.length === 0) {
-    area.innerHTML = '<p class="empty">担当者が設定されたSNSデータがありません。</p>';
+    area.innerHTML = '<p class="empty">担当者が設定されたインフルエンサーがありません。</p>';
     return;
   }
-  if (currentManagerPerson && persons.indexOf(currentManagerPerson) < 0) { currentManagerPerson = null; currentManagerCategory = null; }
-
-  var personRows = currentManagerPerson ? rows.filter(function(s) { return s.person === currentManagerPerson; }) : [];
-  var categories = [];
-  personRows.forEach(function(s) { if (categories.indexOf(s.category) < 0) categories.push(s.category); });
-  if (currentManagerCategory && currentManagerCategory !== '__ALL__' && categories.indexOf(currentManagerCategory) < 0) currentManagerCategory = null;
+  if (currentManagerPerson && persons.indexOf(currentManagerPerson) < 0) currentManagerPerson = null;
 
   var sidebarHtml = '<div class="snap-sidebar">' + persons.map(function(p) {
     var arg = p.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     var isSel = currentManagerPerson === p;
-    var html = '<button class="snap-nav-item' + (isSel ? ' active' : '') + '" onclick="showManagerTab(\'' + arg + '\')">' + esc(p) + '</button>';
-    if (isSel && categories.length > 1) {
-      html += '<button class="snap-nav-sub' + (!currentManagerCategory ? ' active' : '') + '" onclick="setManagerCategory(null)">全体（集計）</button>';
-      html += '<button class="snap-nav-sub' + (currentManagerCategory === '__ALL__' ? ' active' : '') + '" onclick="setManagerCategory(\'__ALL__\')">チャンネル別に全部表示</button>';
-      html += categories.map(function(c) {
-        var cArg = c.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        return '<button class="snap-nav-sub' + (currentManagerCategory === c ? ' active' : '') + '" onclick="setManagerCategory(\'' + cArg + '\')">' + esc(c) + '</button>';
-      }).join('');
-    }
-    return html;
+    return '<button class="snap-nav-item' + (isSel ? ' active' : '') + '" onclick="showManagerTab(\'' + arg + '\')">' + esc(p) + '</button>';
   }).join('') + '</div>';
 
   if (!currentManagerPerson) {
@@ -2035,112 +2017,31 @@ function renderManagersTab() {
     return;
   }
 
-  var PLATFORM_ORDER = ['Instagram', 'X', 'YouTube', 'TikTok', 'Threads', 'その他'];
-  var availablePlatforms = [];
-  categories.forEach(function(c) { var p = platformOf(c); if (availablePlatforms.indexOf(p) < 0) availablePlatforms.push(p); });
-  availablePlatforms.sort(function(a, b) { return PLATFORM_ORDER.indexOf(a) - PLATFORM_ORDER.indexOf(b); });
-  currentManagerPlatforms = currentManagerPlatforms.filter(function(p) { return availablePlatforms.indexOf(p) >= 0; });
+  var sources = Object.keys(SOURCE_PERSON_MAP).filter(function(src) { return SOURCE_PERSON_MAP[src] === currentManagerPerson; });
+  var list = DATA.records.filter(function(r) { return sources.indexOf(r.source) >= 0; });
+  list.sort(function(a, b) { return (b.registeredAt || '').localeCompare(a.registeredAt || ''); });
 
-  var platformFilterHtml = availablePlatforms.length > 1 ? '<div class="tab-row" style="margin-bottom:14px">' + availablePlatforms.map(function(p) {
-    var pArg = p.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    var isOn = currentManagerPlatforms.indexOf(p) >= 0;
-    return '<button class="tab' + (isOn ? ' active' : '') + '" onclick="toggleManagerPlatform(\'' + pArg + '\')">' + esc(p) + '</button>';
-  }).join('') + '</div>' : '';
+  var total = list.filter(function(r) { return r.status !== 'ブロック'; }).length;
+  var booked = list.filter(function(r) { return isBookedStatus(r.status); }).length;
+  var closed = list.filter(function(r) { return isClosedStatus(r.status); }).length;
+  var traveled = list.filter(function(r) { return isTravelStatus(r.status); }).length;
+  var totalRevenue = list.reduce(function(sum, r) { return sum + (Number(r.revenue) || 0); }, 0);
 
-  var platformFilteredRows = currentManagerPlatforms.length ? personRows.filter(function(s) { return currentManagerPlatforms.indexOf(platformOf(s.category)) >= 0; }) : personRows;
+  var kpiHtml = '<div class="kpi-row">' +
+    kpiCard(total, '総登録数') +
+    kpiCard(booked, '相談会予約数') +
+    kpiCard(total ? Math.round(booked / total * 100) + '%' : '-', '予約率') +
+    kpiCard(closed, '成約数') +
+    kpiCard(total ? Math.round(closed / total * 100) + '%' : '-', '成約率') +
+  '</div><div class="kpi-row">' +
+    kpiCard(total ? Math.round(traveled / total * 100) + '%' : '-', '渡韓率') +
+    kpiCard(traveled, '渡韓数') +
+    kpiCard(formatRevenue(totalRevenue) || '₩0', '売上合計') +
+  '</div>';
 
-  var showAllBreakdown = currentManagerCategory === '__ALL__';
-  var targetRows = (currentManagerCategory && !showAllBreakdown) ? platformFilteredRows.filter(function(s) { return s.category === currentManagerCategory; }) : platformFilteredRows;
-  var isAggregate = !currentManagerCategory && categories.length > 1;
+  var headingHtml = '<p style="font-size:0.8em;color:#7088a0;margin-bottom:12px">担当アカウント: ' + sources.map(esc).join('、') + '（' + list.length + '件）</p>';
 
-  var dates = [];
-  targetRows.forEach(function(s) { if (dates.indexOf(s.date) < 0) dates.push(s.date); });
-  dates.sort();
-
-  var METRIC_ORDER = ['全体', 'カウンセ申込済', '来場', '成約', '渡韓済'];
-  var thead, bodyRows;
-
-  if (showAllBreakdown) {
-    var categoryOrder = [];
-    var metricsByCategory = {};
-    targetRows.forEach(function(s) {
-      if (!metricsByCategory[s.category]) { metricsByCategory[s.category] = []; categoryOrder.push(s.category); }
-      if (metricsByCategory[s.category].indexOf(s.metric) < 0) metricsByCategory[s.category].push(s.metric);
-    });
-    categoryOrder.forEach(function(cat) {
-      metricsByCategory[cat].sort(function(a, b) { return METRIC_ORDER.indexOf(a) - METRIC_ORDER.indexOf(b); });
-    });
-    var byKeyDate = {};
-    targetRows.forEach(function(s) { byKeyDate[s.category + '｜' + s.metric + '｜' + s.date] = s.value; });
-
-    thead = '<tr><th>チャンネル</th><th>項目</th>' + dates.map(function(d) { return '<th>' + esc(formatMonth(d)) + '</th>'; }).join('') + '</tr>';
-    var lastCat = null;
-    bodyRows = categoryOrder.map(function(cat) {
-      return metricsByCategory[cat].map(function(metric) {
-        var isStart = cat !== lastCat;
-        var catLabel = isStart ? esc(cat) : '';
-        lastCat = cat;
-        var cells = dates.map(function(d, i) {
-          var val = byKeyDate[cat + '｜' + metric + '｜' + d];
-          if (val === undefined) return '<td class="num">-</td>';
-          var prevVal;
-          for (var j = i - 1; j >= 0; j--) {
-            var pv = byKeyDate[cat + '｜' + metric + '｜' + dates[j]];
-            if (pv !== undefined) { prevVal = pv; break; }
-          }
-          var diff = null, pct = null;
-          if (prevVal !== undefined) {
-            diff = val - prevVal;
-            pct = prevVal !== 0 ? Math.round(diff / prevVal * 1000) / 10 : null;
-          }
-          return '<td class="num">' + formatCellWithDelta(val.toLocaleString('ja-JP'), diff, pct) + '</td>';
-        }).join('');
-        return '<tr class="' + (isStart ? 'group-start' : '') + '"><td class="cat-label">' + catLabel + '</td><td class="metric-label">' + esc(metric) + '</td>' + cells + '</tr>';
-      }).join('');
-    }).join('');
-  } else {
-    var groups = {};
-    var groupsUsed = [];
-    targetRows.forEach(function(s) {
-      if (!groups[s.metric]) { groups[s.metric] = { metric: s.metric, byDate: {} }; if (groupsUsed.indexOf(s.metric) < 0) groupsUsed.push(s.metric); }
-      if (isAggregate) {
-        var cur = groups[s.metric].byDate[s.date];
-        groups[s.metric].byDate[s.date] = (cur || 0) + s.value;
-      } else {
-        groups[s.metric].byDate[s.date] = s.value;
-      }
-    });
-    var order = METRIC_ORDER.filter(function(m) { return groupsUsed.indexOf(m) >= 0; }).concat(groupsUsed.filter(function(m) { return METRIC_ORDER.indexOf(m) < 0; }));
-
-    thead = '<tr><th>項目</th>' + dates.map(function(d) { return '<th>' + esc(formatMonth(d)) + '</th>'; }).join('') + '</tr>';
-
-    bodyRows = order.map(function(metric) {
-      var g = groups[metric];
-      var cells = dates.map(function(d, i) {
-        var val = g.byDate[d];
-        if (val === undefined) return '<td class="num">-</td>';
-        var prevVal;
-        for (var j = i - 1; j >= 0; j--) { if (g.byDate[dates[j]] !== undefined) { prevVal = g.byDate[dates[j]]; break; } }
-        var diff = null, pct = null;
-        if (prevVal !== undefined) {
-          diff = val - prevVal;
-          pct = prevVal !== 0 ? Math.round(diff / prevVal * 1000) / 10 : null;
-        }
-        return '<td class="num">' + formatCellWithDelta(val.toLocaleString('ja-JP'), diff, pct) + '</td>';
-      }).join('');
-      return '<tr><td class="metric-label">' + esc(metric) + '</td>' + cells + '</tr>';
-    }).join('');
-  }
-
-  var headingHtml = showAllBreakdown
-    ? '<p style="font-size:0.8em;color:#7088a0;margin-bottom:12px">担当チャンネル: ' + categories.map(esc).join('、') + '（チャンネル別）</p>'
-    : currentManagerCategory
-    ? '<p style="font-size:0.8em;color:#7088a0;margin-bottom:12px">チャンネル: ' + esc(currentManagerCategory) + '</p>'
-    : '<p style="font-size:0.8em;color:#7088a0;margin-bottom:12px">担当チャンネル: ' + categories.map(esc).join('、') + '</p>';
-
-  var tableHtml = platformFilterHtml + headingHtml + '<div class="table-wrap snap-wrap"><table class="snap-table"><thead>' + thead + '</thead><tbody>' + bodyRows + '</tbody></table></div>';
-
-  area.innerHTML = '<div class="snap-layout">' + sidebarHtml + '<div class="snap-main">' + tableHtml + '</div></div>';
+  area.innerHTML = '<div class="snap-layout">' + sidebarHtml + '<div class="snap-main">' + headingHtml + kpiHtml + buildTableHtml(list) + '</div></div>';
 }
 
 // 初期化

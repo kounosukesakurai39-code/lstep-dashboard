@@ -103,6 +103,11 @@
   .incentive-total-row td { font-weight: 700; background: #f6f9fc; border-top: 2px solid #b9c6d6; color: #14548a; }
   .incentive-back-btn { border: none; background: none; color: #14548a; font-size: 0.85em; font-weight: 600; cursor: pointer; padding: 0; margin-bottom: 12px; display: inline-block; }
   .incentive-back-btn:hover { text-decoration: underline; }
+  .incentive-filter-bar { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; }
+  .incentive-search-input { padding: 7px 12px; border: 1px solid #d5dee8; border-radius: 8px; font-size: 0.85em; width: 220px; color: #1f2b3d; }
+  .incentive-search-input:focus { outline: none; border-color: #14548a; }
+  .incentive-unpaid-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 0.82em; color: #55677e; cursor: pointer; }
+  .incentive-unpaid-toggle input { accent-color: #14548a; cursor: pointer; }
 
   .chart-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
   .chart-box { background: #fff; border: 1px solid #e5eaf0; border-radius: 10px; padding: 16px; flex: 1; min-width: 300px; }
@@ -454,6 +459,36 @@ var incentiveSubGroupOpen = {};
 var currentIncentiveMonth = null;
 var currentIncentiveGroup = null;
 var currentIncentivePlatform = null;
+var incentiveSearchText = '';
+var incentiveUnpaidOnly = false;
+
+function filterIncentiveRows(list) {
+  return list.filter(function(r) {
+    if (incentiveUnpaidOnly && r.payment) return false;
+    if (incentiveSearchText) {
+      var hay = ((r.name || '') + ' ' + (r.customerNo || '')).toLowerCase();
+      if (hay.indexOf(incentiveSearchText.toLowerCase()) < 0) return false;
+    }
+    return true;
+  });
+}
+
+function updateIncentiveSearch(value) {
+  incentiveSearchText = value;
+  renderManagersTab();
+}
+
+function toggleIncentiveUnpaidOnly() {
+  incentiveUnpaidOnly = !incentiveUnpaidOnly;
+  renderManagersTab();
+}
+
+function incentiveFilterBarHtml() {
+  return '<div class="incentive-filter-bar">' +
+    '<input type="text" class="incentive-search-input" placeholder="名前・顧客番号で検索" value="' + esc(incentiveSearchText) + '" oninput="updateIncentiveSearch(this.value)">' +
+    '<label class="incentive-unpaid-toggle"><input type="checkbox" ' + (incentiveUnpaidOnly ? 'checked' : '') + ' onchange="toggleIncentiveUnpaidOnly()"> 未払いだけ表示</label>' +
+    '</div>';
+}
 var SOURCE_PLATFORM_OVERRIDE = { 'Emmaさん': 'X', 'おしおさん': 'X' };
 function getSourcePlatform(source) {
   return SOURCE_PLATFORM_OVERRIDE[source] || platformOf(source);
@@ -2198,7 +2233,7 @@ function renderManagersTab() {
     var groupMainHtml, groupHeadingHtml;
 
     if (currentIncentivePlatform) {
-      var platRowsData = groupRows.filter(function(r) { return getSourcePlatform(r.source) === currentIncentivePlatform; });
+      var platRowsData = filterIncentiveRows(groupRows.filter(function(r) { return getSourcePlatform(r.source) === currentIncentivePlatform; }));
       var thead2 = '<tr><th>アカウント</th>' + INCENTIVE_COLUMNS.map(function(c) { return '<th>' + esc(c.label) + '</th>'; }).join('') + '<th></th></tr>';
       var bodyRows2 = platRowsData.map(function(r) {
         var cells = INCENTIVE_COLUMNS.map(function(c) {
@@ -2208,7 +2243,7 @@ function renderManagersTab() {
         var autoBadge = r.recordId ? '<span class="incentive-auto-badge" title="渡韓済のためインフルエンサータブから自動追加">自動</span>' : '';
         return '<tr><td class="cat-label">' + esc(r.source) + '</td>' + cells + '<td>' + autoBadge + '<button class="incentive-del" onclick="deleteIncentiveRow(' + r.id + ')" title="削除">×</button></td></tr>';
       }).join('');
-      groupMainHtml = '<button class="incentive-back-btn" onclick="backToIncentiveGroupSummary()">← 集計に戻る</button><div class="table-wrap"><table class="incentive-table"><thead>' + thead2 + '</thead><tbody>' + bodyRows2 + '</tbody></table></div>';
+      groupMainHtml = '<button class="incentive-back-btn" onclick="backToIncentiveGroupSummary()">← 集計に戻る</button>' + incentiveFilterBarHtml() + '<div class="table-wrap"><table class="incentive-table"><thead>' + thead2 + '</thead><tbody>' + bodyRows2 + '</tbody></table></div>';
       groupHeadingHtml = '<div class="incentive-head"><p class="incentive-title">' + groupTitleBase + '　' + esc(currentIncentivePlatform) + 'のインセンティブ表</p></div>';
     } else {
       var platGroups = {};
@@ -2287,7 +2322,7 @@ function renderManagersTab() {
         '</tbody></table></div>';
     }
   } else {
-    var targetRows = currentIncentiveMonth === '__ALL__' ? rows : rows.filter(function(r) { return (extractYearMonth(r.surgeryDate) || '未定') === currentIncentiveMonth; });
+    var targetRows = filterIncentiveRows(currentIncentiveMonth === '__ALL__' ? rows : rows.filter(function(r) { return (extractYearMonth(r.surgeryDate) || '未定') === currentIncentiveMonth; }));
     var thead = '<tr>' + INCENTIVE_COLUMNS.map(function(c) { return '<th>' + esc(c.label) + '</th>'; }).join('') + '<th></th></tr>';
     var bodyRows = targetRows.map(function(r) {
       var cells = INCENTIVE_COLUMNS.map(function(c) {
@@ -2297,7 +2332,7 @@ function renderManagersTab() {
       var autoBadge = r.recordId ? '<span class="incentive-auto-badge" title="渡韓済のためインフルエンサータブから自動追加">自動</span>' : '';
       return '<tr>' + cells + '<td>' + autoBadge + '<button class="incentive-del" onclick="deleteIncentiveRow(' + r.id + ')" title="削除">×</button></td></tr>';
     }).join('');
-    mainHtml = '<button class="incentive-back-btn" onclick="backToIncentiveSummary()">← 集計に戻る</button><div class="table-wrap"><table class="incentive-table"><thead>' + thead + '</thead><tbody>' + bodyRows + '</tbody></table></div>';
+    mainHtml = '<button class="incentive-back-btn" onclick="backToIncentiveSummary()">← 集計に戻る</button>' + incentiveFilterBarHtml() + '<div class="table-wrap"><table class="incentive-table"><thead>' + thead + '</thead><tbody>' + bodyRows + '</tbody></table></div>';
   }
 
   var monthLabel = currentIncentiveMonth === '__ALL__' ? '全件' : (currentIncentiveMonth === '未定' ? '未定' : (currentIncentiveMonth ? formatMonth(currentIncentiveMonth) : ''));

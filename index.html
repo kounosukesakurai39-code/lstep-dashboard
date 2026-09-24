@@ -516,7 +516,7 @@ function incentiveFilterBarHtml() {
     '<input type="text" class="incentive-search-input" placeholder="名前・顧客番号で検索" value="' + esc(incentiveSearchText) + '" oninput="updateIncentiveSearch(this.value)">' +
     '</div>';
 }
-var SOURCE_PLATFORM_OVERRIDE = { 'Emmaさん': 'X', 'おしおさん': 'X' };
+var SOURCE_PLATFORM_OVERRIDE = { 'Emmaさん': 'X' };
 function getSourcePlatform(source) {
   return SOURCE_PLATFORM_OVERRIDE[source] || platformOf(source);
 }
@@ -572,8 +572,10 @@ var INFLUENCER_GROUPS = {
   '梅村': ['梅村X', '梅村note', '梅村ブログ', '梅村スレッズ']
 };
 var SOURCE_PERSON_MAP = {
-  'おしおさん': '村上',
-  '梅村X': 'コウノスケ',
+  'おしおX': '村上',
+  'Navi X': 'コウノスケ',
+  '江南X': 'コウノスケ',
+  'infoX': 'コウノスケ',
   'よしえオンニインスタグラム（原川）': '原川',
   'よしえオンニyoutubeショート（原川）': '原川',
   '藤原 X': '藤原',

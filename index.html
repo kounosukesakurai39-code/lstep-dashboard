@@ -88,7 +88,9 @@
   .incentive-table { border-collapse: collapse; font-size: 0.85em; background: #fff; }
   .incentive-table th, .incentive-table td { border: 1px solid #d9e0ea; padding: 0; }
   .incentive-table th { background: #eaf2f9; color: #163a5c; font-weight: 600; padding: 8px 10px; white-space: nowrap; }
-  .incentive-input { width: 130px; border: none; background: transparent; padding: 8px 10px; font: inherit; color: #1f2b3d; }
+  .incentive-input { width: 130px; border: none; background: transparent; padding: 8px 10px; font: inherit; color: #1f2b3d; text-align: center; }
+  .incentive-table th { text-align: center; }
+  .incentive-table td.num { text-align: center; }
   .incentive-input:focus { outline: 2px solid #14548a; outline-offset: -2px; background: #f4f8fc; }
   .incentive-del { border: none; background: transparent; color: #b0bdcc; font-size: 1em; cursor: pointer; padding: 8px 10px; }
   .incentive-del:hover { color: #c0304a; }
@@ -464,6 +466,28 @@ var currentIncentiveGroup = null;
 var currentIncentivePlatform = null;
 var currentIncentiveGroupMonth = null;
 var currentIncentiveMonthPlatformBreakdown = null;
+var incentiveNavMode = 'influencer';
+
+function setIncentiveNavMode(mode) {
+  incentiveNavMode = mode;
+  currentIncentiveGroup = null;
+  currentIncentiveSource = null;
+  currentIncentiveMonth = null;
+  currentIncentivePlatform = null;
+  currentIncentiveGroupMonth = null;
+  currentIncentiveMonthPlatformBreakdown = null;
+  renderManagersTab();
+}
+
+function showIncentivePersonGroup(person) {
+  currentIncentiveGroup = 'PERSON::' + person;
+  currentIncentiveSource = null;
+  currentIncentiveMonth = null;
+  currentIncentivePlatform = null;
+  currentIncentiveGroupMonth = null;
+  currentIncentiveMonthPlatformBreakdown = null;
+  renderManagersTab();
+}
 var incentiveSummaryView = 'platform';
 
 function setIncentiveSummaryView(view) {
@@ -546,6 +570,16 @@ var INFLUENCER_GROUPS = {
   'よしえオンニ': ['よしえオンニインスタグラム（原川）', 'よしえオンニyoutubeショート（原川）'],
   '藤原': ['藤原 X', '藤原 note', '藤原 youtube'],
   '梅村': ['梅村X', '梅村note', '梅村ブログ', '梅村スレッズ']
+};
+var SOURCE_PERSON_MAP = {
+  'おしおさん': '村上',
+  '梅村X': 'コウノスケ',
+  'よしえオンニインスタグラム（原川）': '原川',
+  'よしえオンニyoutubeショート（原川）': '原川',
+  '藤原 X': '藤原',
+  '藤原 note': '藤原',
+  '藤原 youtube': '藤原',
+  '深町 X': '深町'
 };
 var influencerSubGroupOpen = {};
 
@@ -2239,36 +2273,65 @@ function renderManagersTab() {
   var renderedGroups = {};
   var isAllSel = currentIncentiveGroup === '__ALL__' && !currentIncentiveSource;
   var sidebarItems = ['<button class="snap-nav-item' + (isAllSel ? ' active' : '') + '" onclick="showIncentiveAll()">全体</button>'];
-  DATA.sources.forEach(function(name) {
-    var group = memberToGroup[name];
-    if (group) {
-      if (renderedGroups[group]) return;
-      renderedGroups[group] = true;
-      var isOpen = !!incentiveSubGroupOpen[group];
-      var isGroupSel = currentIncentiveGroup === group && !currentIncentiveSource;
-      var gArg = group.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-      sidebarItems.push('<button class="snap-nav-sub-group' + (isGroupSel ? ' active' : '') + '" onclick="toggleIncentiveSubGroup(\'' + gArg + '\')"><span>' + (isOpen ? '▼' : '▶') + '</span><span>' + esc(group) + '</span><span class="count">(' + INFLUENCER_GROUPS[group].length + ')</span></button>');
-      if (isOpen) {
-        INFLUENCER_GROUPS[group].forEach(function(sub) {
-          var subArg = sub.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-          var isSel = currentIncentiveSource === sub;
-          sidebarItems.push('<button class="snap-nav-sub2' + (isSel ? ' active' : '') + '" onclick="showIncentiveSource(\'' + subArg + '\')">' + esc(sub) + '</button>');
-        });
+
+  if (incentiveNavMode === 'person') {
+    var personNames = [];
+    Object.keys(SOURCE_PERSON_MAP).forEach(function(src) {
+      var p = SOURCE_PERSON_MAP[src];
+      if (personNames.indexOf(p) < 0) personNames.push(p);
+    });
+    personNames.sort(function(a, b) { return a.localeCompare(b, 'ja'); });
+    personNames.forEach(function(p) {
+      var pArg = p.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      var isSel = currentIncentiveGroup === 'PERSON::' + p && !currentIncentiveSource;
+      sidebarItems.push('<button class="snap-nav-item' + (isSel ? ' active' : '') + '" onclick="showIncentivePersonGroup(\'' + pArg + '\')">' + esc(p) + '</button>');
+    });
+  } else {
+    DATA.sources.forEach(function(name) {
+      var group = memberToGroup[name];
+      if (group) {
+        if (renderedGroups[group]) return;
+        renderedGroups[group] = true;
+        var isOpen = !!incentiveSubGroupOpen[group];
+        var isGroupSel = currentIncentiveGroup === group && !currentIncentiveSource;
+        var gArg = group.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        sidebarItems.push('<button class="snap-nav-sub-group' + (isGroupSel ? ' active' : '') + '" onclick="toggleIncentiveSubGroup(\'' + gArg + '\')"><span>' + (isOpen ? '▼' : '▶') + '</span><span>' + esc(group) + '</span><span class="count">(' + INFLUENCER_GROUPS[group].length + ')</span></button>');
+        if (isOpen) {
+          INFLUENCER_GROUPS[group].forEach(function(sub) {
+            var subArg = sub.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            var isSel = currentIncentiveSource === sub;
+            sidebarItems.push('<button class="snap-nav-sub2' + (isSel ? ' active' : '') + '" onclick="showIncentiveSource(\'' + subArg + '\')">' + esc(sub) + '</button>');
+          });
+        }
+      } else {
+        var arg = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        var isSel2 = currentIncentiveSource === name;
+        sidebarItems.push('<button class="snap-nav-item' + (isSel2 ? ' active' : '') + '" onclick="showIncentiveSource(\'' + arg + '\')">' + esc(name) + '</button>');
       }
-    } else {
-      var arg = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-      var isSel2 = currentIncentiveSource === name;
-      sidebarItems.push('<button class="snap-nav-item' + (isSel2 ? ' active' : '') + '" onclick="showIncentiveSource(\'' + arg + '\')">' + esc(name) + '</button>');
-    }
-  });
-  var sidebarHtml = '<div class="snap-sidebar">' + sidebarItems.join('') + '</div>';
+    });
+  }
+
+  var navModeTabsHtml = '<div class="incentive-view-tabs" style="margin:0 0 10px">' +
+    '<button class="incentive-view-tab' + (incentiveNavMode !== 'person' ? ' active' : '') + '" onclick="setIncentiveNavMode(\'influencer\')">インフルエンサー別</button>' +
+    '<button class="incentive-view-tab' + (incentiveNavMode === 'person' ? ' active' : '') + '" onclick="setIncentiveNavMode(\'person\')">担当者別一覧</button>' +
+    '</div>';
+  var sidebarHtml = '<div class="snap-sidebar">' + navModeTabsHtml + sidebarItems.join('') + '</div>';
 
   if (currentIncentiveGroup && !currentIncentiveSource) {
-    var groupSources = currentIncentiveGroup === '__ALL__' ? DATA.sources.slice() : (INFLUENCER_GROUPS[currentIncentiveGroup] || []);
+    var groupSources;
+    if (currentIncentiveGroup === '__ALL__') {
+      groupSources = DATA.sources.slice();
+    } else if (currentIncentiveGroup.indexOf('PERSON::') === 0) {
+      var groupPersonName = currentIncentiveGroup.slice(8);
+      groupSources = Object.keys(SOURCE_PERSON_MAP).filter(function(s) { return SOURCE_PERSON_MAP[s] === groupPersonName; });
+    } else {
+      groupSources = INFLUENCER_GROUPS[currentIncentiveGroup] || [];
+    }
     groupSources.forEach(function(src) { syncIncentiveRowsFromRecords(src); });
     var groupRows = DATA.incentiveRows.filter(function(r) { return groupSources.indexOf(r.source) >= 0; });
 
-    var groupTitleBase = currentIncentiveGroup === '__ALL__' ? '全体' : esc(currentIncentiveGroup) + ' 全体';
+    var groupDisplayName = currentIncentiveGroup.indexOf('PERSON::') === 0 ? currentIncentiveGroup.slice(8) : currentIncentiveGroup;
+    var groupTitleBase = currentIncentiveGroup === '__ALL__' ? '全体' : esc(groupDisplayName) + ' 全体';
     var groupMainHtml, groupHeadingHtml;
 
     if (currentIncentivePlatform || currentIncentiveGroupMonth) {

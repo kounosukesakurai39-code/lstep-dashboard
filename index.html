@@ -110,8 +110,7 @@
   .incentive-view-tab { border: none; background: transparent; color: #8494a8; font-size: 0.85em; font-weight: 500; padding: 8px 14px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
   .incentive-view-tab:hover { color: #163a5c; }
   .incentive-view-tab.active { color: #14548a; border-bottom-color: #14548a; font-weight: 700; }
-  .incentive-clickable-num { cursor: pointer; color: #14548a; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px; }
-  .incentive-clickable-num:hover { color: #0f4373; background: #eaf2f9; }
+  .incentive-btn-group { display: flex; gap: 6px; justify-content: flex-end; padding: 6px 8px; }
 
   .chart-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
   .chart-box { background: #fff; border: 1px solid #e5eaf0; border-radius: 10px; padding: 16px; flex: 1; min-width: 300px; }
@@ -2361,7 +2360,7 @@ function renderManagersTab() {
         var g = gMonthGroups[k];
         var kArg = k.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         var label = k === '未定' ? '未定' : formatMonth(k);
-        return '<tr><td class="cat-label">' + esc(label) + '</td><td class="num incentive-clickable-num" onclick="showIncentiveMonthPlatforms(\'' + kArg + '\')" title="プラットフォーム別の内訳を見る">' + g.count + '</td><td class="num">' + formatRevenue(g.amount) + '</td><td class="num">' + formatRevenue(g.bonus) + '</td><td><button class="incentive-detail-btn" onclick="showIncentiveGroupMonth(\'' + kArg + '\')">詳細</button></td></tr>';
+        return '<tr><td class="cat-label">' + esc(label) + '</td><td class="num">' + g.count + '</td><td class="num">' + formatRevenue(g.amount) + '</td><td class="num">' + formatRevenue(g.bonus) + '</td><td class="incentive-btn-group"><button class="incentive-detail-btn" onclick="showIncentiveMonthPlatforms(\'' + kArg + '\')">プラットフォーム内訳</button><button class="incentive-detail-btn" onclick="showIncentiveGroupMonth(\'' + kArg + '\')">詳細</button></td></tr>';
       }).join('');
 
       var monthTableHtml = '<div class="table-wrap"><table class="incentive-table"><thead><tr><th>手術月</th><th>件数</th><th>金額合計</th><th>インセンティブ合計</th><th></th></tr></thead><tbody>' + monthRowsHtml +

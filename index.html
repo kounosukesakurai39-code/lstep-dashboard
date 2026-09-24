@@ -488,6 +488,12 @@ function showIncentivePersonGroup(person) {
   currentIncentiveMonthPlatformBreakdown = null;
   renderManagersTab();
 }
+
+function togglePersonGroupOpen(person) {
+  var key = 'PERSON::' + person;
+  incentiveSubGroupOpen[key] = !incentiveSubGroupOpen[key];
+  showIncentivePersonGroup(person);
+}
 var incentiveSummaryView = 'platform';
 
 function setIncentiveSummaryView(view) {
@@ -2285,8 +2291,18 @@ function renderManagersTab() {
     personNames.sort(function(a, b) { return a.localeCompare(b, 'ja'); });
     personNames.forEach(function(p) {
       var pArg = p.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-      var isSel = currentIncentiveGroup === 'PERSON::' + p && !currentIncentiveSource;
-      sidebarItems.push('<button class="snap-nav-item' + (isSel ? ' active' : '') + '" onclick="showIncentivePersonGroup(\'' + pArg + '\')">' + esc(p) + '</button>');
+      var personSources = Object.keys(SOURCE_PERSON_MAP).filter(function(s) { return SOURCE_PERSON_MAP[s] === p; });
+      var openKey = 'PERSON::' + p;
+      var isOpen = !!incentiveSubGroupOpen[openKey];
+      var isGroupSel = currentIncentiveGroup === openKey && !currentIncentiveSource;
+      sidebarItems.push('<button class="snap-nav-sub-group' + (isGroupSel ? ' active' : '') + '" onclick="togglePersonGroupOpen(\'' + pArg + '\')"><span>' + (isOpen ? '▼' : '▶') + '</span><span>' + esc(p) + '</span><span class="count">(' + personSources.length + ')</span></button>');
+      if (isOpen) {
+        personSources.forEach(function(sub) {
+          var subArg = sub.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+          var isSel = currentIncentiveSource === sub;
+          sidebarItems.push('<button class="snap-nav-sub2' + (isSel ? ' active' : '') + '" onclick="showIncentiveSource(\'' + subArg + '\')">' + esc(sub) + '</button>');
+        });
+      }
     });
   } else {
     DATA.sources.forEach(function(name) {

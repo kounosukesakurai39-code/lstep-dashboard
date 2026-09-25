@@ -2095,6 +2095,29 @@ function extractYearMonth(str) {
   return null;
 }
 
+function fillContinuousMonths(groupsObj) {
+  var pad = function(n) { return n < 10 ? '0' + n : '' + n; };
+  var dataKeys = Object.keys(groupsObj).filter(function(k) { return k !== '未定'; });
+  var today = new Date();
+  var currentKey = today.getFullYear() + '-' + pad(today.getMonth() + 1);
+  var allKeys = dataKeys.concat([currentKey]).sort();
+  var minKey = allKeys[0];
+  var maxKey = allKeys[allKeys.length - 1];
+  var y = parseInt(minKey.slice(0, 4), 10), m = parseInt(minKey.slice(5, 7), 10);
+  var endY = parseInt(maxKey.slice(0, 4), 10), endM = parseInt(maxKey.slice(5, 7), 10);
+  var result = [];
+  while (y < endY || (y === endY && m <= endM)) {
+    var key = y + '-' + pad(m);
+    if (!groupsObj[key]) groupsObj[key] = { count: 0, amount: 0, bonus: 0 };
+    result.push(key);
+    m++;
+    if (m > 12) { m = 1; y++; }
+  }
+  result.reverse();
+  if (groupsObj['未定']) result.push('未定');
+  return result;
+}
+
 function toggleIncentiveSubGroup(name) {
   incentiveSubGroupOpen[name] = !incentiveSubGroupOpen[name];
   currentIncentiveGroup = name;
@@ -2435,8 +2458,7 @@ function renderManagersTab() {
         gMonthGroups[ym].amount += Number(r.amount) || 0;
         gMonthGroups[ym].bonus += Number(r.bonus) || 0;
       });
-      var gMonthKeys = Object.keys(gMonthGroups).filter(function(k) { return k !== '未定'; }).sort().reverse();
-      if (gMonthGroups['未定']) gMonthKeys.push('未定');
+      var gMonthKeys = groupRows.length === 0 ? [] : fillContinuousMonths(gMonthGroups);
 
       var monthRowsHtml = gMonthKeys.map(function(k) {
         var g = gMonthGroups[k];
@@ -2485,8 +2507,7 @@ function renderManagersTab() {
       monthGroups[ym].amount += Number(r.amount) || 0;
       monthGroups[ym].bonus += Number(r.bonus) || 0;
     });
-    var monthKeys = Object.keys(monthGroups).filter(function(k) { return k !== '未定'; }).sort().reverse();
-    if (monthGroups['未定']) monthKeys.push('未定');
+    var monthKeys = rows.length === 0 ? [] : fillContinuousMonths(monthGroups);
 
     var totalCount = rows.length;
     var totalAmount = rows.reduce(function(s, r) { return s + (Number(r.amount) || 0); }, 0);

@@ -26,7 +26,7 @@
   .tab.active { background: #1a6090; color: #fff; border-color: #1a6090; }
 
   .panel { max-width: 1000px; margin: 0 auto; display: none; }
-  #panel-snapshot, #panel-managers { max-width: none; }
+  #panel-snapshot, #panel-managers, #panel-incentiveRate { max-width: none; }
   .panel.active { display: block; }
 
   .toolbar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
@@ -252,6 +252,7 @@
     <button class="tab" id="tabbtn-csv" onclick="showTab('csv')">📥 CSV取込</button>
     <button class="tab" id="tabbtn-snapshot" onclick="showTab('snapshot')">📅 月次集計</button>
     <button class="tab" id="tabbtn-managers" onclick="showTab('managers')">👤 管理者別</button>
+    <button class="tab" id="tabbtn-incentiveRate" onclick="showTab('incentiveRate')">💰 インセンティブ表</button>
     <button class="tab" id="tabbtn-settings" onclick="showTab('settings')">⚙️ 設定</button>
   </div>
 </nav>
@@ -345,6 +346,10 @@
 
 <div class="panel" id="panel-managers">
   <div id="managersArea"></div>
+</div>
+
+<div class="panel" id="panel-incentiveRate">
+  <div id="incentiveRateArea"></div>
 </div>
 
 <!-- 設定 -->
@@ -609,6 +614,7 @@ function showTab(id) {
   if (id === 'settings') renderSettings();
   if (id === 'snapshot') renderSnapshotTab();
   if (id === 'managers') renderManagersGate();
+  if (id === 'incentiveRate') renderIncentiveRateTab();
 }
 
 function toggleInfluencerGroup() {
@@ -2177,6 +2183,25 @@ function backToIncentiveGroupTop() {
   currentIncentiveGroupMonth = null;
   currentIncentiveMonthPlatformBreakdown = null;
   renderManagersTab();
+}
+
+function renderIncentiveRateTab() {
+  var area = document.getElementById('incentiveRateArea');
+  var rows = DATA.sources.map(function(name) {
+    var platform = getSourcePlatform(name);
+    var rate = esc(DATA.incentiveRates[name] || '');
+    var arg = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return '<tr><td class="cat-label">' + esc(name) + '</td><td class="cat-label">' + esc(platform) + '</td><td class="num"><input type="number" class="incentive-rate-input" value="' + rate + '" placeholder="0" onchange="updateIncentiveRateFor(\'' + arg + '\',this.value)">%</td></tr>';
+  }).join('');
+  area.innerHTML = '<h2 style="color:#1a6090;font-size:1.1em;margin-bottom:16px">💰 インセンティブ表</h2>' +
+    '<div class="table-wrap"><table class="incentive-table"><thead><tr><th>名前</th><th>どのSNSか</th><th>パーセンテージ</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+
+function updateIncentiveRateFor(source, value) {
+  if (value === '') delete DATA.incentiveRates[source];
+  else DATA.incentiveRates[source] = value;
+  save();
+  renderIncentiveRateTab();
 }
 
 var INCENTIVE_COLUMNS = [

@@ -92,6 +92,10 @@
   .incentive-table th { text-align: center; }
   .incentive-table td.num { text-align: center; }
   .incentive-table td.cat-label { text-align: center; }
+  .incentive-rate-table { table-layout: fixed; width: auto; }
+  .incentive-rate-table th:first-child, .incentive-rate-table td:first-child { width: 220px; }
+  .incentive-rate-table th:nth-child(2), .incentive-rate-table td:nth-child(2) { width: 110px; }
+  .incentive-rate-table th:nth-child(3), .incentive-rate-table td:nth-child(3) { width: 140px; }
   .incentive-input:focus { outline: 2px solid #14548a; outline-offset: -2px; background: #f4f8fc; }
   .incentive-del { border: none; background: transparent; color: #b0bdcc; font-size: 1em; cursor: pointer; padding: 8px 10px; }
   .incentive-del:hover { color: #c0304a; }
@@ -2332,7 +2336,7 @@ function renderManagersTab() {
       var arg = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       return '<tr><td class="cat-label">' + esc(name) + '</td><td class="cat-label">' + esc(platform) + '</td><td class="num"><input type="number" class="incentive-rate-input" value="' + rate + '" placeholder="0" onchange="updateIncentiveRateFor(\'' + arg + '\',this.value)">%</td></tr>';
     }).join('');
-    var rateMainHtml = '<div class="table-wrap"><table class="incentive-table"><thead><tr><th>名前</th><th>SNS</th><th>パーセンテージ</th></tr></thead><tbody>' + rateRows + '</tbody></table></div>';
+    var rateMainHtml = '<div class="table-wrap"><table class="incentive-table incentive-rate-table"><thead><tr><th>名前</th><th>SNS</th><th>パーセンテージ</th></tr></thead><tbody>' + rateRows + '</tbody></table></div>';
     area.innerHTML = '<div class="snap-layout"><div class="snap-sidebar">' + navModeTabsHtml + '</div><div class="snap-main">' + rateMainHtml + '</div></div>';
     return;
   }

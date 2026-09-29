@@ -26,7 +26,7 @@
   .tab.active { background: #1a6090; color: #fff; border-color: #1a6090; }
 
   .panel { max-width: 1000px; margin: 0 auto; display: none; }
-  #panel-snapshot, #panel-managers, #panel-incentiveRate { max-width: none; }
+  #panel-snapshot, #panel-managers { max-width: none; }
   .panel.active { display: block; }
 
   .toolbar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
@@ -252,7 +252,6 @@
     <button class="tab" id="tabbtn-csv" onclick="showTab('csv')">📥 CSV取込</button>
     <button class="tab" id="tabbtn-snapshot" onclick="showTab('snapshot')">📅 月次集計</button>
     <button class="tab" id="tabbtn-managers" onclick="showTab('managers')">👤 管理者別</button>
-    <button class="tab" id="tabbtn-incentiveRate" onclick="showTab('incentiveRate')">💰 インセンティブ表</button>
     <button class="tab" id="tabbtn-settings" onclick="showTab('settings')">⚙️ 設定</button>
   </div>
 </nav>
@@ -346,10 +345,6 @@
 
 <div class="panel" id="panel-managers">
   <div id="managersArea"></div>
-</div>
-
-<div class="panel" id="panel-incentiveRate">
-  <div id="incentiveRateArea"></div>
 </div>
 
 <!-- 設定 -->
@@ -614,7 +609,6 @@ function showTab(id) {
   if (id === 'settings') renderSettings();
   if (id === 'snapshot') renderSnapshotTab();
   if (id === 'managers') renderManagersGate();
-  if (id === 'incentiveRate') renderIncentiveRateTab();
 }
 
 function toggleInfluencerGroup() {
@@ -2319,6 +2313,30 @@ function checkManagersPassword() {
 
 function renderManagersTab() {
   var area = document.getElementById('managersArea');
+  var navModeTabsHtml = '<div class="incentive-view-tabs" style="margin:0 0 10px">' +
+    '<button class="incentive-view-tab' + (incentiveNavMode === 'influencer' ? ' active' : '') + '" onclick="setIncentiveNavMode(\'influencer\')">インフルエンサー別</button>' +
+    '<button class="incentive-view-tab' + (incentiveNavMode === 'person' ? ' active' : '') + '" onclick="setIncentiveNavMode(\'person\')">担当者別一覧</button>' +
+    '<button class="incentive-view-tab' + (incentiveNavMode === 'rate' ? ' active' : '') + '" onclick="setIncentiveNavMode(\'rate\')">インセンティブ表</button>' +
+    '</div>';
+
+  if (incentiveNavMode === 'rate') {
+    var RATE_PLATFORM_ORDER = ['X', 'Instagram', 'YouTube', 'TikTok', 'Threads', 'note', 'その他'];
+    var sortedRateSources = DATA.sources.slice().sort(function(a, b) {
+      var pa = getSourcePlatform(a), pb = getSourcePlatform(b);
+      var d = RATE_PLATFORM_ORDER.indexOf(pa) - RATE_PLATFORM_ORDER.indexOf(pb);
+      return d !== 0 ? d : a.localeCompare(b, 'ja');
+    });
+    var rateRows = sortedRateSources.map(function(name) {
+      var platform = getSourcePlatform(name);
+      var rate = esc(DATA.incentiveRates[name] || '');
+      var arg = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      return '<tr><td class="cat-label">' + esc(name) + '</td><td class="cat-label">' + esc(platform) + '</td><td class="num"><input type="number" class="incentive-rate-input" value="' + rate + '" placeholder="0" onchange="updateIncentiveRateFor(\'' + arg + '\',this.value)">%</td></tr>';
+    }).join('');
+    var rateMainHtml = '<div class="table-wrap"><table class="incentive-table"><thead><tr><th>名前</th><th>SNS</th><th>パーセンテージ</th></tr></thead><tbody>' + rateRows + '</tbody></table></div>';
+    area.innerHTML = '<div class="snap-layout"><div class="snap-sidebar">' + navModeTabsHtml + '</div><div class="snap-main">' + rateMainHtml + '</div></div>';
+    return;
+  }
+
   var memberToGroup = {};
   Object.keys(INFLUENCER_GROUPS).forEach(function(g) {
     INFLUENCER_GROUPS[g].forEach(function(m) {
@@ -2378,10 +2396,6 @@ function renderManagersTab() {
     });
   }
 
-  var navModeTabsHtml = '<div class="incentive-view-tabs" style="margin:0 0 10px">' +
-    '<button class="incentive-view-tab' + (incentiveNavMode !== 'person' ? ' active' : '') + '" onclick="setIncentiveNavMode(\'influencer\')">インフルエンサー別</button>' +
-    '<button class="incentive-view-tab' + (incentiveNavMode === 'person' ? ' active' : '') + '" onclick="setIncentiveNavMode(\'person\')">担当者別一覧</button>' +
-    '</div>';
   var sidebarHtml = '<div class="snap-sidebar">' + navModeTabsHtml + sidebarItems.join('') + '</div>';
 
   if (currentIncentiveGroup && !currentIncentiveSource) {

@@ -1579,6 +1579,7 @@ function commitEditCell(raw, id, createKey) {
   raw = (raw || '').trim();
   if (raw === '') {
     if (id) {
+      if (!confirm('この数値を削除しますか？')) { renderSnapshotTable(); return; }
       DATA.snapshots = DATA.snapshots.filter(function(s) { return s.id !== id; });
       save('🗑️ 削除しました').then(function() { renderSnapshotTable(); }).catch(function() { renderSnapshotTable(); });
     } else {

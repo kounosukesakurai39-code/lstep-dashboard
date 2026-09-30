@@ -1696,15 +1696,6 @@ function renderSnapshotTable() {
       PLATFORM_GROUP_ORDER.forEach(function(p) {
         if (!byPlatform[p]) return;
         var platformMembers = members.filter(function(cat2) { return platformOf(cat2) === p; });
-        if (platformMembers.length === 1) {
-          var soloCat = platformMembers[0];
-          metricsByCategory[soloCat].forEach(function(metric) {
-            var soloKey = soloCat + '｜' + metric;
-            groups[soloKey] = { category: soloCat, metric: metric, byDate: {} };
-            order.push(soloKey);
-          });
-          return;
-        }
         var platformKey = g + '｜' + p;
         var platformMetrics = Object.keys(byPlatform[p]);
         sortMetricsByOverride(platformMetrics);

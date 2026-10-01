@@ -1675,9 +1675,12 @@ function renderSnapshotTable() {
   var PLATFORM_BREAKDOWN_GROUPS = ['SNS'];
 
   groupOrder.forEach(function(g) {
-    var headerKey = '__HEADER__' + g;
-    groups[headerKey] = { isHeader: true, group: g, memberCount: groupMembersMap[g].length };
-    order.push(headerKey);
+    var isSingleMemberGroup = groupMembersMap[g].length === 1;
+    if (!isSingleMemberGroup) {
+      var headerKey = '__HEADER__' + g;
+      groups[headerKey] = { isHeader: true, group: g, memberCount: groupMembersMap[g].length };
+      order.push(headerKey);
+    }
 
     if (expandedGroups[g] && groupMembersMap[g].length > 1) {
       var groupRows = rows.filter(function(s) { return categoryGroup(s) === g; });
@@ -1731,11 +1734,11 @@ function renderSnapshotTable() {
           });
         }
       });
-    } else if (expandedGroups[g] && !isPlatformBreakdownGroup && (groupMembersMap[g].length === 1 || expandedAggDetails[g])) {
+    } else if ((isSingleMemberGroup || expandedGroups[g]) && !isPlatformBreakdownGroup && (groupMembersMap[g].length === 1 || expandedAggDetails[g])) {
       groupMembersMap[g].forEach(function(cat) {
         metricsByCategory[cat].forEach(function(metric) {
           var key = cat + '｜' + metric;
-          groups[key] = { category: cat, metric: metric, byDate: {} };
+          groups[key] = { category: cat, metric: metric, byDate: {}, singleGroup: isSingleMemberGroup ? g : null };
           order.push(key);
 
           if (isSartoMode) {
@@ -1938,6 +1941,10 @@ function renderSnapshotTable() {
     }
     var isGroupStart = g.category !== lastCategory;
     var catLabel = isGroupStart ? esc(g.category) : '';
+    if (isGroupStart && g.singleGroup && !isPeriodMode && !isSartoMode) {
+      var sgArg = g.singleGroup.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      catLabel += ' <span class="compare-toggle' + (expandedCompareGroups[g.singleGroup] ? ' active' : '') + '" onclick="event.stopPropagation(); toggleCompareGroup(\'' + sgArg + '\')">⇄ 他事業と比較</span>';
+    }
     lastCategory = g.category;
 
     var summaryCells;

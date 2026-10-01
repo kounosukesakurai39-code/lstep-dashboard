@@ -122,6 +122,8 @@
   .chart-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
   .chart-box { background: #fff; border: 1px solid #e5eaf0; border-radius: 10px; padding: 16px; flex: 1; min-width: 300px; }
   .chart-box h3 { font-size: 0.9em; color: #1a6090; margin-bottom: 12px; }
+  .chart-box-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .chart-box-head h3 { margin-bottom: 12px; }
   .chart-box.full { flex-basis: 100%; }
 
   .csv-box { background: #fff; border: 1px solid #eef1f5; border-radius: 14px; padding: 22px 24px; margin-bottom: 18px; box-shadow: 0 1px 2px rgba(16,24,40,0.04), 0 1px 3px rgba(16,24,40,0.05); }
@@ -284,7 +286,7 @@
     <button class="tab" id="tabbtn-chart" onclick="showTab('chart')">📈 グラフ</button>
     <button class="tab" id="tabbtn-csv" onclick="showTab('csv')">📥 CSV取込</button>
     <button class="tab" id="tabbtn-snapshot" onclick="showTab('snapshot')">📅 月次集計</button>
-    <button class="tab" id="tabbtn-ranking" onclick="showTab('ranking')">🏆 ランキング</button>
+    <button class="tab" id="tabbtn-ranking" onclick="showTab('ranking')">📊 ダッシュボード</button>
     <button class="tab" id="tabbtn-managers" onclick="showTab('managers')">👤 管理者別</button>
     <button class="tab" id="tabbtn-settings" onclick="showTab('settings')">⚙️ 設定</button>
   </div>
@@ -597,8 +599,9 @@ function formatAreaList(val) {
   if (Array.isArray(val)) return val.join('、');
   return val || '';
 }
-var lineChartInstance = null, statusPieInstance = null;
+var lineChartInstance = null, statusPieInstance = null, increaseBarInstance = null;
 var chartFilterSource = '';
+var increaseChartBusiness = '__ALL__';
 var csvParsed = null; // { headers, rows }
 
 var STATUS_COLORS = ['#4a7090', '#3a6ea5', '#e6a23c', '#9b6bd1', '#27ae60', '#e74c3c', '#60c0f0', '#e94560'];
@@ -1054,6 +1057,64 @@ function renderChartSourceTabs() {
 function setChartFilterSource(source) {
   chartFilterSource = source;
   renderCharts();
+}
+
+function changeIncreaseChartBusiness(b) {
+  increaseChartBusiness = b;
+  renderIncreaseBarChart();
+}
+
+function renderIncreaseBarChart() {
+  var sel = document.getElementById('increaseChartBusiness');
+  if (!sel) return;
+
+  // normal-mode businesses with a 全体 metric (exclude period-mode / SARTO-style)
+  var bizList = [];
+  DATA.snapshots.forEach(function(s) {
+    if (s.business === 'SNS増加数') return;
+    if (SNAP_TAB_HIDDEN_BUSINESSES.indexOf(s.business) >= 0) return;
+    if (s.metric !== '全体') return;
+    if (bizList.indexOf(s.business) < 0) bizList.push(s.business);
+  });
+
+  var opts = '<option value="__ALL__"' + (increaseChartBusiness === '__ALL__' ? ' selected' : '') + '>全事業合計</option>';
+  opts += bizList.map(function(b) {
+    return '<option value="' + esc(b) + '"' + (b === increaseChartBusiness ? ' selected' : '') + '>' + esc(b) + '</option>';
+  }).join('');
+  sel.innerHTML = opts;
+
+  // monthly total of 全体, then delta per month
+  var byMonth = {};
+  DATA.snapshots.forEach(function(s) {
+    if (s.metric !== '全体') return;
+    if (s.business === 'SNS増加数') return;
+    if (SNAP_TAB_HIDDEN_BUSINESSES.indexOf(s.business) >= 0) return;
+    if (increaseChartBusiness !== '__ALL__' && s.business !== increaseChartBusiness) return;
+    var m = (s.date || '').slice(0, 7);
+    if (!m) return;
+    byMonth[m] = (byMonth[m] || 0) + s.value;
+  });
+  var months = Object.keys(byMonth).sort();
+  var labels = [], data = [], colors = [];
+  for (var i = 1; i < months.length; i++) {
+    var diff = byMonth[months[i]] - byMonth[months[i - 1]];
+    labels.push(formatMonth(months[i]));
+    data.push(diff);
+    colors.push(diff >= 0 ? '#2f80c4' : '#c0304a');
+  }
+
+  if (increaseBarInstance) increaseBarInstance.destroy();
+  increaseBarInstance = new Chart(document.getElementById('increaseBar'), {
+    type: 'bar',
+    data: { labels: labels, datasets: [{ label: '登録増加数', data: data, backgroundColor: colors, borderRadius: 5, maxBarThickness: 48 }] },
+    options: {
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: function(ctx) { return '増加数: ' + (ctx.parsed.y >= 0 ? '+' : '') + ctx.parsed.y.toLocaleString('ja-JP'); } } }
+      },
+      scales: { x: { ticks: { color: '#7088a0' }, grid: { display: false } }, y: { ticks: { color: '#7088a0' }, grid: { color: '#eef0f4' }, beginAtZero: true } }
+    }
+  });
 }
 
 function renderCharts() {
@@ -1534,8 +1595,14 @@ function renderRankingTab() {
     return '<div class="rank-card"><div class="rank-card-title ' + accentClass + '-title">' + title + '</div>' + rows + '</div>';
   }
 
-  var html = '<div class="rank-header">' +
-    '<h2 class="rank-h2">🏆 アカウント別ランキング</h2>' +
+  var html = '<h2 class="rank-h2" style="margin-bottom:16px">📊 ダッシュボード</h2>' +
+    '<div class="chart-box full" style="margin-bottom:24px">' +
+      '<div class="chart-box-head"><h3>月別 登録増加数</h3>' +
+      '<select id="increaseChartBusiness" class="rank-select" onchange="changeIncreaseChartBusiness(this.value)"></select></div>' +
+      '<canvas id="increaseBar" height="90"></canvas>' +
+    '</div>' +
+    '<div class="rank-header">' +
+    '<h2 class="rank-h2" style="font-size:1.05em">🏆 アカウント別ランキング</h2>' +
     '<div class="rank-period"><span>期間</span><select class="year-select rank-select" onchange="setRankingPeriod(this.value)">' + periodOptions + '</select></div>' +
     '</div>' +
     '<p class="rank-sub">全事業のSNS・インフルエンサー流入をアカウントごとに表示（' + esc(periodLabel) + '）</p>' +
@@ -1545,6 +1612,7 @@ function renderRankingTab() {
     '</div>';
 
   area.innerHTML = html;
+  renderIncreaseBarChart();
 }
 
 function platformOf(category) {

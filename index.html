@@ -1095,8 +1095,10 @@ function renderIncreaseBarChart() {
     byMonth[m] = (byMonth[m] || 0) + s.value;
   });
   var months = Object.keys(byMonth).sort();
+  var DASH_CHART_START = '2026-06';
   var labels = [], data = [], colors = [];
   for (var i = 1; i < months.length; i++) {
+    if (months[i] < DASH_CHART_START) continue;
     var diff = byMonth[months[i]] - byMonth[months[i - 1]];
     labels.push(formatMonth(months[i]));
     data.push(diff);

@@ -216,7 +216,7 @@
   .rank-pos { width: 30px; text-align: center; font-size: 1.1em; flex-shrink: 0; }
   .rank-pos .rank-num { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: #eef1f5; color: #7c8ca0; font-size: 0.7em; font-weight: 700; }
   .rank-body { flex: 1; min-width: 0; }
-  .rank-name { font-size: 0.88em; font-weight: 600; color: #2a3f54; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rank-name { font-size: 0.84em; font-weight: 600; color: #2a3f54; margin-bottom: 4px; line-height: 1.3; }
   .rank-bar-wrap { height: 7px; background: #f0f3f7; border-radius: 4px; overflow: hidden; }
   .rank-bar { height: 100%; border-radius: 4px; }
   .rank-bar.rank-blue { background: linear-gradient(90deg,#2f80c4,#14548a); }
@@ -1449,16 +1449,8 @@ function categoryGroup(s) {
   return /広告$/.test(s.category) ? '広告' : s.category;
 }
 
-function rankingPersonOf(category) {
-  if (/放置/.test(category)) return '放置アカウント';
-  if (/原川/.test(category)) return '原川';
-  if (/松永/.test(category)) return '松永';
-  if (/おしお/.test(category)) return '村上';
-  if (/Emma/i.test(category)) return 'Emma';
-  var m = category.match(/スタッフ\s*[-－]\s*([^\s　]+)/);
-  if (m) return m[1];
-  if (/よしえオンニ|公式SNS|SNS\s*[-－]\s*江南|コウノスケ/.test(category)) return 'コウノスケ';
-  return 'その他';
+function rankingAccountLabel(category) {
+  return (category || '').replace(/[\s　]+/g, ' ').trim();
 }
 
 var currentRankingPeriod = null;
@@ -1484,25 +1476,22 @@ function renderRankingTab() {
 
   // value lookup: person -> category -> metric -> {date: value}
   function computeRanking(metric) {
-    // person -> number
-    var byPerson = {};
-    // group categories by person, and per category build date->value
+    // account(category) -> date -> value
     var catData = {};
+    var catLabel = {};
     snsRows.forEach(function(s) {
       if (s.metric !== metric) return;
-      if (!catData[s.category]) catData[s.category] = {};
-      catData[s.category][s.date] = (catData[s.category][s.date] || 0) + s.value;
+      var key = s.business + '｜' + s.category;
+      if (!catData[key]) { catData[key] = {}; catLabel[key] = rankingAccountLabel(s.category); }
+      catData[key][s.date] = (catData[key][s.date] || 0) + s.value;
     });
-    Object.keys(catData).forEach(function(cat) {
-      var person = rankingPersonOf(cat);
-      var byDate = catData[cat];
+    var list = Object.keys(catData).map(function(key) {
+      var byDate = catData[key];
       var contribution = 0;
       if (isCumulative) {
-        // latest available value for this category
         var catDates = Object.keys(byDate).sort();
         if (catDates.length) contribution = byDate[catDates[catDates.length - 1]];
       } else {
-        // increase in the selected month vs previous month that has data for this category
         var curV = byDate[currentRankingPeriod];
         if (curV !== undefined) {
           var prevV = null;
@@ -1513,9 +1502,8 @@ function renderRankingTab() {
           contribution = prevV === null ? curV : (curV - prevV);
         }
       }
-      byPerson[person] = (byPerson[person] || 0) + contribution;
+      return { person: catLabel[key], value: contribution };
     });
-    var list = Object.keys(byPerson).map(function(p) { return { person: p, value: byPerson[p] }; });
     list.sort(function(a, b) { return b.value - a.value; });
     return list;
   }
@@ -1547,10 +1535,10 @@ function renderRankingTab() {
   }
 
   var html = '<div class="rank-header">' +
-    '<h2 class="rank-h2">👤 人別ランキング</h2>' +
+    '<h2 class="rank-h2">🏆 アカウント別ランキング</h2>' +
     '<div class="rank-period"><span>期間</span><select class="year-select rank-select" onchange="setRankingPeriod(this.value)">' + periodOptions + '</select></div>' +
     '</div>' +
-    '<p class="rank-sub">全事業のSNS・インフルエンサー流入を担当者ごとに合算（' + esc(periodLabel) + '）</p>' +
+    '<p class="rank-sub">全事業のSNS・インフルエンサー流入をアカウントごとに表示（' + esc(periodLabel) + '）</p>' +
     '<div class="rank-grid">' +
     rankingCardHtml('登録数ランキング', regRanking, 'rank-blue') +
     rankingCardHtml('相談会予約数ランキング', counselRanking, 'rank-green') +

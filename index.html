@@ -201,6 +201,27 @@
   .snap-table tr.grand-total-row .delta-main.delta-flat { color: #d7e2ee; }
   .snap-table tr.grand-total-row .cell-subvalue { color: #cfe0f0; }
 
+  .rank-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+  .rank-h2 { font-size: 1.15em; font-weight: 700; color: #163a5c; margin: 0; }
+  .rank-period { display: flex; align-items: center; gap: 8px; font-size: 0.85em; color: #55677e; }
+  .rank-select { border: 1px solid #cfe0f0 !important; border-radius: 8px; padding: 6px 10px !important; background: #fff !important; width: auto !important; color: #14548a; }
+  .rank-sub { font-size: 0.82em; color: #7c8ca0; margin: 6px 0 18px; }
+  .rank-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
+  .rank-card { border: 1px solid #eef1f5; border-radius: 14px; padding: 6px 0 10px; box-shadow: 0 1px 3px rgba(16,24,40,0.05); background: #fff; overflow: hidden; }
+  .rank-card-title { font-size: 0.95em; font-weight: 700; padding: 14px 18px 12px; border-bottom: 1px solid #f0f2f6; margin-bottom: 4px; }
+  .rank-blue-title { color: #14548a; }
+  .rank-green-title { color: #1f8a4c; }
+  .rank-row { display: flex; align-items: center; gap: 12px; padding: 9px 18px; }
+  .rank-row + .rank-row { border-top: 1px solid #f6f8fb; }
+  .rank-pos { width: 30px; text-align: center; font-size: 1.1em; flex-shrink: 0; }
+  .rank-pos .rank-num { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: #eef1f5; color: #7c8ca0; font-size: 0.7em; font-weight: 700; }
+  .rank-body { flex: 1; min-width: 0; }
+  .rank-name { font-size: 0.88em; font-weight: 600; color: #2a3f54; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rank-bar-wrap { height: 7px; background: #f0f3f7; border-radius: 4px; overflow: hidden; }
+  .rank-bar { height: 100%; border-radius: 4px; }
+  .rank-bar.rank-blue { background: linear-gradient(90deg,#2f80c4,#14548a); }
+  .rank-bar.rank-green { background: linear-gradient(90deg,#49b97a,#1f8a4c); }
+  .rank-val { font-size: 1.05em; font-weight: 700; color: #163a5c; flex-shrink: 0; min-width: 48px; text-align: right; }
   .open-groups-tray { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
   .group-chip { display: inline-flex; align-items: center; gap: 6px; background: #eef4fa; border: 1px solid #cfe0f0; color: #14548a; font-size: 0.78em; font-weight: 600; padding: 4px 6px 4px 10px; border-radius: 999px; cursor: pointer; transition: background .15s; }
   .group-chip:hover { background: #dfebf7; }
@@ -263,6 +284,7 @@
     <button class="tab" id="tabbtn-chart" onclick="showTab('chart')">📈 グラフ</button>
     <button class="tab" id="tabbtn-csv" onclick="showTab('csv')">📥 CSV取込</button>
     <button class="tab" id="tabbtn-snapshot" onclick="showTab('snapshot')">📅 月次集計</button>
+    <button class="tab" id="tabbtn-ranking" onclick="showTab('ranking')">🏆 ランキング</button>
     <button class="tab" id="tabbtn-managers" onclick="showTab('managers')">👤 管理者別</button>
     <button class="tab" id="tabbtn-settings" onclick="showTab('settings')">⚙️ 設定</button>
   </div>
@@ -353,6 +375,10 @@
     <datalist id="snapBusinessList"></datalist>
     </div>
   </details>
+</div>
+
+<div class="panel" id="panel-ranking">
+  <div id="rankingArea"></div>
 </div>
 
 <div class="panel" id="panel-managers">
@@ -626,6 +652,7 @@ function showTab(id) {
   if (id === 'chart') renderCharts();
   if (id === 'settings') renderSettings();
   if (id === 'snapshot') renderSnapshotTab();
+  if (id === 'ranking') renderRankingTab();
   if (id === 'managers') renderManagersGate();
 }
 
@@ -1420,6 +1447,116 @@ function showSnapshotBusinessTab(business) {
 function categoryGroup(s) {
   if (s.group) return s.group;
   return /広告$/.test(s.category) ? '広告' : s.category;
+}
+
+function rankingPersonOf(category) {
+  if (/放置/.test(category)) return '放置アカウント';
+  if (/原川/.test(category)) return '原川';
+  if (/松永/.test(category)) return '松永';
+  if (/おしお/.test(category)) return '村上';
+  if (/Emma/i.test(category)) return 'Emma';
+  var m = category.match(/スタッフ\s*[-－]\s*([^\s　]+)/);
+  if (m) return m[1];
+  if (/よしえオンニ|公式SNS|SNS\s*[-－]\s*江南|コウノスケ/.test(category)) return 'コウノスケ';
+  return 'その他';
+}
+
+var currentRankingPeriod = null;
+
+function setRankingPeriod(p) {
+  currentRankingPeriod = p;
+  renderRankingTab();
+}
+
+function renderRankingTab() {
+  var area = document.getElementById('rankingArea');
+  var snsRows = DATA.snapshots.filter(function(s) {
+    return s.group === 'SNS' && (s.metric === '全体' || s.metric === 'カウンセ申込済');
+  });
+  if (snsRows.length === 0) { area.innerHTML = '<p class="empty">SNSのデータがありません。</p>'; return; }
+
+  var allDates = [];
+  snsRows.forEach(function(s) { if (allDates.indexOf(s.date) < 0) allDates.push(s.date); });
+  allDates.sort();
+  var latestMonth = allDates[allDates.length - 1];
+  if (currentRankingPeriod === null) currentRankingPeriod = latestMonth;
+  var isCumulative = currentRankingPeriod === '__CUMULATIVE__';
+
+  // value lookup: person -> category -> metric -> {date: value}
+  function computeRanking(metric) {
+    // person -> number
+    var byPerson = {};
+    // group categories by person, and per category build date->value
+    var catData = {};
+    snsRows.forEach(function(s) {
+      if (s.metric !== metric) return;
+      if (!catData[s.category]) catData[s.category] = {};
+      catData[s.category][s.date] = (catData[s.category][s.date] || 0) + s.value;
+    });
+    Object.keys(catData).forEach(function(cat) {
+      var person = rankingPersonOf(cat);
+      var byDate = catData[cat];
+      var contribution = 0;
+      if (isCumulative) {
+        // latest available value for this category
+        var catDates = Object.keys(byDate).sort();
+        if (catDates.length) contribution = byDate[catDates[catDates.length - 1]];
+      } else {
+        // increase in the selected month vs previous month that has data for this category
+        var curV = byDate[currentRankingPeriod];
+        if (curV !== undefined) {
+          var prevV = null;
+          var idx = allDates.indexOf(currentRankingPeriod);
+          for (var j = idx - 1; j >= 0; j--) {
+            if (byDate[allDates[j]] !== undefined) { prevV = byDate[allDates[j]]; break; }
+          }
+          contribution = prevV === null ? curV : (curV - prevV);
+        }
+      }
+      byPerson[person] = (byPerson[person] || 0) + contribution;
+    });
+    var list = Object.keys(byPerson).map(function(p) { return { person: p, value: byPerson[p] }; });
+    list.sort(function(a, b) { return b.value - a.value; });
+    return list;
+  }
+
+  var regRanking = computeRanking('全体');
+  var counselRanking = computeRanking('カウンセ申込済');
+
+  var periodOptions = allDates.slice().reverse().map(function(d) {
+    return '<option value="' + d + '"' + (d === currentRankingPeriod ? ' selected' : '') + '>' + esc(formatMonth(d)) + (isCumulative ? '' : '') + '</option>';
+  }).join('');
+  periodOptions += '<option value="__CUMULATIVE__"' + (isCumulative ? ' selected' : '') + '>累計（最新時点）</option>';
+
+  var periodLabel = isCumulative ? '累計' : formatMonth(currentRankingPeriod) + 'の増加数';
+
+  function rankingCardHtml(title, list, accentClass) {
+    var maxVal = list.length ? Math.max.apply(null, list.map(function(r) { return r.value; })) : 0;
+    var rows = list.filter(function(r) { return r.value !== 0; }).map(function(r, i) {
+      var medal = i === 0 ? '🥇' : (i === 1 ? '🥈' : (i === 2 ? '🥉' : '<span class="rank-num">' + (i + 1) + '</span>'));
+      var barW = maxVal > 0 ? Math.max(2, Math.round(r.value / maxVal * 100)) : 0;
+      return '<div class="rank-row">' +
+        '<div class="rank-pos">' + medal + '</div>' +
+        '<div class="rank-body"><div class="rank-name">' + esc(r.person) + '</div>' +
+        '<div class="rank-bar-wrap"><div class="rank-bar ' + accentClass + '" style="width:' + barW + '%"></div></div></div>' +
+        '<div class="rank-val">' + r.value.toLocaleString('ja-JP') + '</div>' +
+        '</div>';
+    }).join('');
+    if (!rows) rows = '<p class="empty" style="padding:16px">この期間は増減がありません。</p>';
+    return '<div class="rank-card"><div class="rank-card-title ' + accentClass + '-title">' + title + '</div>' + rows + '</div>';
+  }
+
+  var html = '<div class="rank-header">' +
+    '<h2 class="rank-h2">👤 人別ランキング</h2>' +
+    '<div class="rank-period"><span>期間</span><select class="year-select rank-select" onchange="setRankingPeriod(this.value)">' + periodOptions + '</select></div>' +
+    '</div>' +
+    '<p class="rank-sub">全事業のSNS・インフルエンサー流入を担当者ごとに合算（' + esc(periodLabel) + '）</p>' +
+    '<div class="rank-grid">' +
+    rankingCardHtml('登録数ランキング', regRanking, 'rank-blue') +
+    rankingCardHtml('相談会予約数ランキング', counselRanking, 'rank-green') +
+    '</div>';
+
+  area.innerHTML = html;
 }
 
 function platformOf(category) {

@@ -203,6 +203,19 @@
   .snap-table tr.grand-total-row .delta-main.delta-flat { color: #d7e2ee; }
   .snap-table tr.grand-total-row .cell-subvalue { color: #cfe0f0; }
 
+  .fn-box { border: 1px solid #eef1f5; border-radius: 14px; padding: 6px 18px 18px; box-shadow: 0 1px 3px rgba(16,24,40,0.05); background: #fff; }
+  .fn-box-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid #f0f2f6; padding: 10px 0 12px; margin-bottom: 14px; }
+  .fn-box-head h3 { font-size: 0.95em; font-weight: 700; color: #163a5c; margin: 0; }
+  .fn-overall { font-size: 0.85em; color: #55677e; } .fn-overall b { color: #14548a; font-size: 1.15em; }
+  .fn-row { display: flex; align-items: center; gap: 14px; padding: 6px 0; }
+  .fn-label { width: 84px; flex-shrink: 0; font-size: 0.85em; font-weight: 600; color: #2a3f54; text-align: right; }
+  .fn-bar-wrap { flex: 1; min-width: 0; background: #f0f3f7; border-radius: 6px; overflow: hidden; }
+  .fn-bar { height: 30px; background: linear-gradient(90deg,#3f93d0,#14548a); border-radius: 6px; display: flex; align-items: center; justify-content: flex-end; min-width: 42px; transition: width .4s ease; }
+  .fn-count { color: #fff; font-weight: 700; font-size: 0.82em; padding-right: 10px; white-space: nowrap; }
+  .fn-pct { width: 128px; flex-shrink: 0; font-size: 0.78em; color: #7c8ca0; }
+  .fn-pct b { color: #1f8a4c; font-size: 1.12em; }
+  .fn-step-first { color: #b0bdcc; }
+  @media (max-width: 560px) { .fn-pct { width: 92px; } .fn-label { width: 60px; } }
   .rank-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
   .rank-h2 { font-size: 1.15em; font-weight: 700; color: #163a5c; margin: 0; }
   .rank-period { display: flex; align-items: center; gap: 8px; font-size: 0.85em; color: #55677e; }
@@ -1059,16 +1072,12 @@ function setChartFilterSource(source) {
   renderCharts();
 }
 
-function changeIncreaseChartBusiness(b) {
+function changeDashboardBusiness(b) {
   increaseChartBusiness = b;
-  renderIncreaseBarChart();
+  renderRankingTab();
 }
 
-function renderIncreaseBarChart() {
-  var sel = document.getElementById('increaseChartBusiness');
-  if (!sel) return;
-
-  // normal-mode businesses with a 全体 metric (exclude period-mode / SARTO-style)
+function dashboardBusinessList() {
   var bizList = [];
   DATA.snapshots.forEach(function(s) {
     if (s.business === 'SNS増加数') return;
@@ -1076,12 +1085,31 @@ function renderIncreaseBarChart() {
     if (s.metric !== '全体') return;
     if (bizList.indexOf(s.business) < 0) bizList.push(s.business);
   });
+  return bizList;
+}
 
-  var opts = '<option value="__ALL__"' + (increaseChartBusiness === '__ALL__' ? ' selected' : '') + '>全事業合計</option>';
-  opts += bizList.map(function(b) {
-    return '<option value="' + esc(b) + '"' + (b === increaseChartBusiness ? ' selected' : '') + '>' + esc(b) + '</option>';
-  }).join('');
-  sel.innerHTML = opts;
+// 事業スコープのファネル累計（カテゴリごとの最新値を合算）
+function computeFunnelTotals(scope) {
+  var FUNNEL_METRICS = ['全体', 'カウンセ申込済', '来場', '成約', '渡韓済'];
+  var latest = {}; // business|category|metric -> {date, value}
+  DATA.snapshots.forEach(function(s) {
+    if (s.business === 'SNS増加数') return;
+    if (SNAP_TAB_HIDDEN_BUSINESSES.indexOf(s.business) >= 0) return;
+    if (FUNNEL_METRICS.indexOf(s.metric) < 0) return;
+    if (scope !== '__ALL__' && s.business !== scope) return;
+    var key = s.business + '｜' + s.category + '｜' + s.metric;
+    if (!latest[key] || s.date > latest[key].date) latest[key] = { date: s.date, value: s.value };
+  });
+  var totals = { '全体': 0, 'カウンセ申込済': 0, '来場': 0, '成約': 0, '渡韓済': 0 };
+  Object.keys(latest).forEach(function(key) {
+    var metric = key.split('｜')[2];
+    totals[metric] += latest[key].value;
+  });
+  return totals;
+}
+
+function renderIncreaseBarChart() {
+  if (!document.getElementById('increaseBar')) return;
 
   // monthly total of 全体, then delta per month
   var byMonth = {};
@@ -1597,10 +1625,58 @@ function renderRankingTab() {
     return '<div class="rank-card"><div class="rank-card-title ' + accentClass + '-title">' + title + '</div>' + rows + '</div>';
   }
 
-  var html = '<h2 class="rank-h2" style="margin-bottom:16px">📊 ダッシュボード</h2>' +
-    '<div class="chart-box full" style="margin-bottom:24px">' +
-      '<div class="chart-box-head"><h3>月別 登録増加数</h3>' +
-      '<select id="increaseChartBusiness" class="rank-select" onchange="changeIncreaseChartBusiness(this.value)"></select></div>' +
+  // ── 事業スコープ セレクト（KPI・ファネル・棒グラフを制御）──
+  var bizList = dashboardBusinessList();
+  if (increaseChartBusiness !== '__ALL__' && bizList.indexOf(increaseChartBusiness) < 0) increaseChartBusiness = '__ALL__';
+  var scopeOptions = '<option value="__ALL__"' + (increaseChartBusiness === '__ALL__' ? ' selected' : '') + '>全事業合計</option>' +
+    bizList.map(function(b) { return '<option value="' + esc(b) + '"' + (b === increaseChartBusiness ? ' selected' : '') + '>' + esc(b) + '</option>'; }).join('');
+  var scopeLabel = increaseChartBusiness === '__ALL__' ? '全事業合計' : increaseChartBusiness;
+
+  // ── KPIサマリー & ファネル ──
+  var f = computeFunnelTotals(increaseChartBusiness);
+  var pct = function(num, den) { return den > 0 ? Math.round(num / den * 1000) / 10 : null; };
+  var kpiHtml = '<div class="kpi-row">' +
+    '<div class="kpi-card"><div class="val">' + f['全体'].toLocaleString('ja-JP') + '</div><div class="label">登録数</div></div>' +
+    '<div class="kpi-card"><div class="val">' + f['カウンセ申込済'].toLocaleString('ja-JP') + '</div><div class="label">相談会予約数</div></div>' +
+    '<div class="kpi-card"><div class="val">' + f['来場'].toLocaleString('ja-JP') + '</div><div class="label">来場数</div></div>' +
+    '<div class="kpi-card"><div class="val">' + f['成約'].toLocaleString('ja-JP') + '</div><div class="label">成約数</div></div>' +
+    '<div class="kpi-card"><div class="val">' + f['渡韓済'].toLocaleString('ja-JP') + '</div><div class="label">渡韓数</div></div>' +
+    '</div>';
+
+  var funnelStages = [
+    { label: '登録', value: f['全体'], prev: null },
+    { label: '相談会予約', value: f['カウンセ申込済'], prev: f['全体'] },
+    { label: '来場', value: f['来場'], prev: f['カウンセ申込済'] },
+    { label: '成約', value: f['成約'], prev: f['来場'] },
+    { label: '渡韓', value: f['渡韓済'], prev: f['成約'] }
+  ];
+  var funnelBase = f['全体'] || 1;
+  var funnelRows = funnelStages.map(function(st) {
+    var w = Math.max(1, Math.round(st.value / funnelBase * 100));
+    var stepPct = st.prev === null ? null : pct(st.value, st.prev);
+    var stepHtml = stepPct === null ? '<span class="fn-step fn-step-first">スタート</span>'
+      : '<span class="fn-step">前段階から <b>' + stepPct + '%</b></span>';
+    return '<div class="fn-row">' +
+      '<div class="fn-label">' + st.label + '</div>' +
+      '<div class="fn-bar-wrap"><div class="fn-bar" style="width:' + w + '%"><span class="fn-count">' + st.value.toLocaleString('ja-JP') + '</span></div></div>' +
+      '<div class="fn-pct">' + stepHtml + '</div>' +
+      '</div>';
+  }).join('');
+  var overallPct = pct(f['渡韓済'], f['全体']);
+  var funnelHtml = '<div class="fn-box">' +
+    '<div class="fn-box-head"><h3>ファネル転換率</h3>' +
+    '<span class="fn-overall">登録→渡韓 <b>' + (overallPct === null ? '-' : overallPct + '%') + '</b></span></div>' +
+    funnelRows + '</div>';
+
+  var html = '<div class="rank-header" style="margin-bottom:16px">' +
+    '<h2 class="rank-h2">📊 ダッシュボード</h2>' +
+    '<div class="rank-period"><span>事業</span><select class="year-select rank-select" onchange="changeDashboardBusiness(this.value)">' + scopeOptions + '</select></div>' +
+    '</div>' +
+    '<p class="rank-sub" style="margin-top:-8px">' + esc(scopeLabel) + ' の累計（最新時点）</p>' +
+    kpiHtml +
+    funnelHtml +
+    '<div class="chart-box full" style="margin:24px 0">' +
+      '<div class="chart-box-head"><h3>月別 登録増加数</h3></div>' +
       '<canvas id="increaseBar" height="90"></canvas>' +
     '</div>' +
     '<div class="rank-header">' +

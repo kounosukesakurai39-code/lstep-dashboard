@@ -176,6 +176,8 @@
   .snap-table thead th.th-cat { left: 0; width: 170px; }
   .snap-table thead th.th-metric { left: 170px; width: 130px; }
   .snap-table thead th.th-year { left: 300px; width: 90px; }
+  .snap-table .year-select { font: inherit; font-weight: 600; color: #55677e; background: transparent; border: none; cursor: pointer; padding: 2px 4px; border-radius: 6px; -webkit-appearance: none; appearance: none; text-align: center; width: 100%; }
+  .snap-table .year-select:hover { background: #eef1f5; }
   .snap-table thead th.th-all { left: 390px; width: 90px; }
   .snap-table thead th.period-th { top: 35.5px; width: 70px; }
   .snap-table thead th.month-th { width: 280px; border-right: 2px solid #b9c6d6; }
@@ -431,8 +433,14 @@ var expandedAggDetails = {};
 var expandedPlatformDetails = {};
 var expandedCompareGroups = {};
 var showZentaiOnly = false;
+var currentSnapYear = {};
 var SNAP_TAB_HIDDEN_BUSINESSES = ['SARTO'];
 var COMPARE_EXCLUDED_BUSINESSES = ['SNS増加数'];
+
+function changeSnapYear(year) {
+  currentSnapYear[currentSnapshotBusiness] = year;
+  renderSnapshotTable();
+}
 
 function toggleGroupExpand(g) {
   expandedGroups[g] = !expandedGroups[g];
@@ -1862,19 +1870,27 @@ function renderSnapshotTable() {
   }
 
   var latestYear = dates.length ? dates[dates.length - 1].slice(0, 4) : '';
+  var availableSnapYears = [];
+  dates.forEach(function(d) { var y = d.slice(0, 4); if (availableSnapYears.indexOf(y) < 0) availableSnapYears.push(y); });
+  availableSnapYears.sort();
+  var activeYear = (currentSnapYear[currentSnapshotBusiness] && availableSnapYears.indexOf(currentSnapYear[currentSnapshotBusiness]) >= 0) ? currentSnapYear[currentSnapshotBusiness] : latestYear;
+  latestYear = activeYear;
+  var yearSelectHtml = '<select class="year-select" onclick="event.stopPropagation()" onchange="changeSnapYear(this.value)">' +
+    availableSnapYears.map(function(y) { return '<option value="' + y + '"' + (y === activeYear ? ' selected' : '') + '>' + y + '年累計</option>'; }).join('') +
+    '</select>';
 
   var thead;
   if (isPeriodMode) {
     var PERIOD_LABELS = ['1〜10', '11〜20', '21〜31', '合計'];
     var monthHeaderCells = monthGroups.map(function(m) { return '<th class="month-th" colspan="4">' + esc(formatMonth(m)) + '</th>'; }).join('');
     var periodHeaderCells = monthGroups.map(function() { return PERIOD_LABELS.map(function(lbl, li) { return '<th class="period-th' + (li === 3 ? ' period-total-th' : '') + '">' + lbl + '</th>'; }).join(''); }).join('');
-    thead = '<tr><th class="th-cat" rowspan="2">カテゴリ</th><th class="th-metric" rowspan="2">項目</th><th class="th-year" rowspan="2">年間累計</th><th class="th-all" rowspan="2">全体累計</th>' + monthHeaderCells + '</tr><tr>' + periodHeaderCells + '</tr>';
+    thead = '<tr><th class="th-cat" rowspan="2">カテゴリ</th><th class="th-metric" rowspan="2">項目</th><th class="th-year" rowspan="2">' + yearSelectHtml + '</th><th class="th-all" rowspan="2">全体累計</th>' + monthHeaderCells + '</tr><tr>' + periodHeaderCells + '</tr>';
   } else if (isSartoMode) {
     var sartoMonthHeaderCells = dates.map(function(d) { return '<th class="month-th-2" colspan="2">' + esc(formatMonth(d)) + '</th>'; }).join('');
     var sartoSubHeaderCells = dates.map(function() { return '<th class="period-th">実数</th><th class="period-th period-total-th">増加数</th>'; }).join('');
-    thead = '<tr><th class="th-cat" rowspan="2">カテゴリ</th><th class="th-metric" rowspan="2">項目</th><th class="th-year" rowspan="2">年間累計</th><th class="th-all" rowspan="2">全体累計</th>' + sartoMonthHeaderCells + '</tr><tr>' + sartoSubHeaderCells + '</tr>';
+    thead = '<tr><th class="th-cat" rowspan="2">カテゴリ</th><th class="th-metric" rowspan="2">項目</th><th class="th-year" rowspan="2">' + yearSelectHtml + '</th><th class="th-all" rowspan="2">全体累計</th>' + sartoMonthHeaderCells + '</tr><tr>' + sartoSubHeaderCells + '</tr>';
   } else {
-    thead = '<tr><th class="th-cat">カテゴリ</th><th class="th-metric">項目</th><th class="th-year">年間累計</th><th class="th-all">全体累計</th>' + datesDisplay.map(function(d) { return '<th>' + esc(formatMonth(d)) + '</th>'; }).join('') + '</tr>';
+    thead = '<tr><th class="th-cat">カテゴリ</th><th class="th-metric">項目</th><th class="th-year">' + yearSelectHtml + '</th><th class="th-all">全体累計</th>' + datesDisplay.map(function(d) { return '<th>' + esc(formatMonth(d)) + '</th>'; }).join('') + '</tr>';
   }
 
   var lastCategory = null;

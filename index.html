@@ -194,6 +194,12 @@
   .snap-table tr.group-header-row:hover td { background: #e3edf6 !important; }
   .snap-table td.group-header-cell { position: sticky; left: 0; z-index: 1; white-space: nowrap; }
   .snap-table tr.group-header-row td.group-header-cell { z-index: 2; }
+  .snap-table tr.grand-total-row td { background: #14548a !important; font-weight: 700; color: #fff; position: sticky; top: 35.5px; z-index: 1; box-shadow: 0 1px 0 #0d3c66; }
+  .snap-table tr.grand-total-row td.group-header-cell { position: sticky; left: 0; z-index: 2; white-space: nowrap; font-size: 0.95em; }
+  .snap-table tr.grand-total-row .delta-main.delta-up { color: #8be0ab; }
+  .snap-table tr.grand-total-row .delta-main.delta-down { color: #ffb3bf; }
+  .snap-table tr.grand-total-row .delta-main.delta-flat { color: #d7e2ee; }
+  .snap-table tr.grand-total-row .cell-subvalue { color: #cfe0f0; }
 
   .open-groups-tray { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
   .group-chip { display: inline-flex; align-items: center; gap: 6px; background: #eef4fa; border: 1px solid #cfe0f0; color: #14548a; font-size: 0.78em; font-weight: 600; padding: 4px 6px 4px 10px; border-radius: 999px; cursor: pointer; transition: background .15s; }
@@ -2055,6 +2061,40 @@ function renderSnapshotTable() {
     }
     return '<tr class="' + trClass + '"' + rowAttrs + '><td class="cat-label">' + catLabel + '</td><td class="metric-label">' + esc(g.metric) + '</td>' + summaryCells + cells + '</tr>';
   }).join('');
+
+  var grandTotalRowHtml = '';
+  if (!isPeriodMode && !isSartoMode) {
+    var grandByDate = {};
+    rows.forEach(function(s) { if (s.metric === '全体') grandByDate[s.date] = (grandByDate[s.date] || 0) + s.value; });
+    var gYearTotal = null, gAllTotal = null;
+    for (var gdi = dates.length - 1; gdi >= 0; gdi--) {
+      var gd = dates[gdi];
+      var gv = grandByDate[gd];
+      if (gv === undefined) continue;
+      if (gAllTotal === null) gAllTotal = gv;
+      if (gYearTotal === null && gd.slice(0, 4) === latestYear) gYearTotal = gv;
+      if (gAllTotal !== null && gYearTotal !== null) break;
+    }
+    var gSummaryCells = '<td class="num year-total">' + (gYearTotal === null ? '-' : gYearTotal.toLocaleString('ja-JP')) + '</td><td class="num all-total">' + (gAllTotal === null ? '-' : gAllTotal.toLocaleString('ja-JP')) + '</td>';
+    var gCells = datesDisplay.map(function(d) {
+      var v = grandByDate[d];
+      if (v === undefined) return '<td class="num">-</td>';
+      var valueHtml = v.toLocaleString('ja-JP');
+      var prevVal = null;
+      for (var gj = dateIndex[d] - 1; gj >= 0; gj--) {
+        var pv = grandByDate[dates[gj]];
+        if (pv !== undefined) { prevVal = pv; break; }
+      }
+      var diff = null, pct = null;
+      if (prevVal !== null) {
+        diff = v - prevVal;
+        pct = prevVal !== 0 ? Math.round(diff / prevVal * 1000) / 10 : null;
+      }
+      return '<td class="num">' + formatCellWithDelta(valueHtml, diff, pct) + '</td>';
+    }).join('');
+    grandTotalRowHtml = '<tr class="grand-total-row"><td class="group-header-cell" colspan="2">全体合計</td>' + gSummaryCells + gCells + '</tr>';
+  }
+  bodyRows = grandTotalRowHtml + bodyRows;
 
   var openGroupNames = [];
   order.forEach(function(key) {

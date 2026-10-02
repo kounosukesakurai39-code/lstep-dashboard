@@ -1110,21 +1110,39 @@ function dashboardBusinessList() {
 // 事業スコープのファネル累計（カテゴリごとの最新値を合算）
 function computeFunnelTotals(scope) {
   var FUNNEL_METRICS = ['全体', 'カウンセ申込済', '来場', '成約', '渡韓済'];
-  var yearEnd = dashboardYear ? dashboardYear + '-12' : null;
-  var latest = {}; // business|category|metric -> {date, value}
+  var entries = {}; // business|category|metric -> [{date, value}]
   DATA.snapshots.forEach(function(s) {
     if (s.business === 'SNS増加数') return;
     if (SNAP_TAB_HIDDEN_BUSINESSES.indexOf(s.business) >= 0) return;
     if (FUNNEL_METRICS.indexOf(s.metric) < 0) return;
     if (scope !== '__ALL__' && s.business !== scope) return;
-    if (yearEnd && s.date > yearEnd) return;
     var key = s.business + '｜' + s.category + '｜' + s.metric;
-    if (!latest[key] || s.date > latest[key].date) latest[key] = { date: s.date, value: s.value };
+    (entries[key] = entries[key] || []).push({ date: s.date, value: s.value });
   });
+  function latestLE(list, cutoff) {
+    var best = null;
+    list.forEach(function(e) { if (e.date <= cutoff && (!best || e.date > best.date)) best = e; });
+    return best ? best.value : 0;
+  }
+  function latestAll(list) {
+    var best = null;
+    list.forEach(function(e) { if (!best || e.date > best.date) best = e; });
+    return best ? best.value : 0;
+  }
   var totals = { '全体': 0, 'カウンセ申込済': 0, '来場': 0, '成約': 0, '渡韓済': 0 };
-  Object.keys(latest).forEach(function(key) {
+  Object.keys(entries).forEach(function(key) {
     var metric = key.split('｜')[2];
-    totals[metric] += latest[key].value;
+    var list = entries[key];
+    var v;
+    if (!dashboardYear) {
+      v = latestAll(list);
+    } else {
+      // その年の増加分 = 年末時点の累計 − 前年末時点の累計
+      var yEnd = dashboardYear + '-12';
+      var prevEnd = (parseInt(dashboardYear, 10) - 1) + '-12';
+      v = latestLE(list, yEnd) - latestLE(list, prevEnd);
+    }
+    totals[metric] += v;
   });
   return totals;
 }
@@ -1656,9 +1674,9 @@ function renderRankingTab() {
   // ── 年セレクト ──
   var yearList = dashboardYearList();
   if (dashboardYear && yearList.indexOf(dashboardYear) < 0) dashboardYear = null;
-  var yearOptions = '<option value="__ALL__"' + (dashboardYear === null ? ' selected' : '') + '>全期間</option>' +
-    yearList.slice().reverse().map(function(y) { return '<option value="' + y + '"' + (y === dashboardYear ? ' selected' : '') + '>' + y + '年末時点</option>'; }).join('');
-  var yearLabel = dashboardYear ? (dashboardYear + '年末時点の累計') : '累計（最新時点）';
+  var yearOptions = '<option value="__ALL__"' + (dashboardYear === null ? ' selected' : '') + '>全期間（累計）</option>' +
+    yearList.slice().reverse().map(function(y) { return '<option value="' + y + '"' + (y === dashboardYear ? ' selected' : '') + '>' + y + '年</option>'; }).join('');
+  var yearLabel = dashboardYear ? (dashboardYear + '年の実績') : '累計（最新時点）';
 
   // ── KPIサマリー & ファネル ──
   var f = computeFunnelTotals(increaseChartBusiness);

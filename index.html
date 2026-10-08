@@ -90,6 +90,10 @@
   .incentive-table th { background: #eaf2f9; color: #163a5c; font-weight: 600; padding: 8px 10px; white-space: nowrap; }
   .incentive-input { width: 130px; border: none; background: transparent; padding: 8px 10px; font: inherit; color: #1f2b3d; text-align: center; }
   .incentive-computed { background: #f6f9fc; color: #55677e; font-weight: 600; text-align: center; min-width: 130px; white-space: nowrap; padding: 8px 10px; }
+  .inc-col-bonus, .inc-col-bonus input { color: #1f8a4c; font-weight: 600; }
+  .inc-col-other, .inc-col-other input { color: #c47f17; font-weight: 600; }
+  .inc-col-pay { color: #14548a !important; font-weight: 700; background: #eef4fa !important; }
+  td.inc-col-bonus, td.inc-col-other { background: #fcfdff; }
   .incentive-table th { text-align: center; }
   .incentive-table td.num { text-align: center; }
   .incentive-table td.cat-label { text-align: center; }
@@ -909,6 +913,12 @@ function formatRevenue(revenue) {
   if (!revenue) return '';
   var n = Number(revenue);
   return isNaN(n) ? esc(revenue) : '₩' + n.toLocaleString('ja-JP');
+}
+
+function formatYen(v) {
+  if (!v) return '';
+  var n = Number(v);
+  return isNaN(n) ? esc(v) : '¥' + n.toLocaleString('ja-JP');
 }
 
 function formatMonth(ym) {
@@ -2610,6 +2620,25 @@ function incentiveComputedValue(key, r) {
   return 0;
 }
 
+function incentiveColClass(key) {
+  if (key === 'amount' || key === 'amountExTax') return 'inc-col-extax';
+  if (key === 'bonus') return 'inc-col-bonus';
+  if (key === 'other') return 'inc-col-other';
+  if (key === 'payTotal') return 'inc-col-pay';
+  return '';
+}
+
+function incentiveCellHtml(c, r) {
+  var cls = incentiveColClass(c.key);
+  if (c.computed) {
+    var cv = incentiveComputedValue(c.key, r);
+    var txt = c.key === 'amountExTax' ? formatRevenue(cv) : formatYen(cv);
+    return '<td class="num incentive-computed ' + cls + '">' + (cv ? txt : '') + '</td>';
+  }
+  var val = esc(r[c.key] || '');
+  return '<td class="' + cls + '"><input type="text" class="incentive-input" value="' + val + '" onchange="updateIncentiveCell(' + r.id + ',\'' + c.key + '\',this.value)"></td>';
+}
+
 function incentiveExTax(amount) {
   var a = Number(amount);
   if (!a) return 0;
@@ -2635,7 +2664,11 @@ function incentiveAccFromRows(list) {
 }
 var INCENTIVE_SUMMARY_HEAD = '<th>件数</th><th>手術費用（税抜）</th><th>インセンティブ</th><th>その他</th><th>支払い合計</th>';
 function incentiveSummaryCells(g) {
-  return '<td class="num">' + g.count + '</td><td class="num">' + formatRevenue(g.exTax) + '</td><td class="num">' + formatRevenue(g.bonus) + '</td><td class="num">' + formatRevenue(g.other) + '</td><td class="num">' + formatRevenue(g.pay) + '</td>';
+  return '<td class="num">' + g.count + '</td>' +
+    '<td class="num inc-col-extax">' + formatRevenue(g.exTax) + '</td>' +
+    '<td class="num inc-col-bonus">' + formatYen(g.bonus) + '</td>' +
+    '<td class="num inc-col-other">' + formatYen(g.other) + '</td>' +
+    '<td class="num inc-col-pay">' + formatYen(g.pay) + '</td>';
 }
 
 function addIncentiveRow() {
@@ -2851,14 +2884,7 @@ function renderManagersTab() {
       var platRowsData = filterIncentiveRows(groupDetailRows);
       var thead2 = '<tr><th>アカウント</th><th>プラットフォーム</th>' + INCENTIVE_COLUMNS.map(function(c) { return '<th>' + esc(c.label) + '</th>'; }).join('') + '<th></th></tr>';
       var bodyRows2 = platRowsData.map(function(r) {
-        var cells = INCENTIVE_COLUMNS.map(function(c) {
-          if (c.computed) {
-            var cv = incentiveComputedValue(c.key, r);
-            return '<td class="num incentive-computed">' + (cv ? formatRevenue(cv) : '') + '</td>';
-          }
-          var val = esc(r[c.key] || '');
-          return '<td><input type="text" class="incentive-input" value="' + val + '" onchange="updateIncentiveCell(' + r.id + ',\'' + c.key + '\',this.value)"></td>';
-        }).join('');
+        var cells = INCENTIVE_COLUMNS.map(function(c) { return incentiveCellHtml(c, r); }).join('');
         var autoBadge = r.recordId ? '<span class="incentive-auto-badge" title="渡韓済のためインフルエンサータブから自動追加">自動</span>' : '';
         return '<tr><td class="cat-label">' + esc(r.source) + '</td><td class="cat-label">' + esc(getSourcePlatform(r.source)) + '</td>' + cells + '<td>' + autoBadge + '<button class="incentive-del" onclick="deleteIncentiveRow(' + r.id + ')" title="削除">×</button></td></tr>';
       }).join('');
@@ -2991,14 +3017,7 @@ function renderManagersTab() {
     var targetRows = filterIncentiveRows(currentIncentiveMonth === '__ALL__' ? rows : rows.filter(function(r) { return (extractYearMonth(r.surgeryDate) || '未定') === currentIncentiveMonth; }));
     var thead = '<tr>' + INCENTIVE_COLUMNS.map(function(c) { return '<th>' + esc(c.label) + '</th>'; }).join('') + '<th></th></tr>';
     var bodyRows = targetRows.map(function(r) {
-      var cells = INCENTIVE_COLUMNS.map(function(c) {
-        if (c.computed) {
-            var cv = incentiveComputedValue(c.key, r);
-            return '<td class="num incentive-computed">' + (cv ? formatRevenue(cv) : '') + '</td>';
-          }
-        var val = esc(r[c.key] || '');
-        return '<td><input type="text" class="incentive-input" value="' + val + '" onchange="updateIncentiveCell(' + r.id + ',\'' + c.key + '\',this.value)"></td>';
-      }).join('');
+      var cells = INCENTIVE_COLUMNS.map(function(c) { return incentiveCellHtml(c, r); }).join('');
       var autoBadge = r.recordId ? '<span class="incentive-auto-badge" title="渡韓済のためインフルエンサータブから自動追加">自動</span>' : '';
       return '<tr>' + cells + '<td>' + autoBadge + '<button class="incentive-del" onclick="deleteIncentiveRow(' + r.id + ')" title="削除">×</button></td></tr>';
     }).join('');

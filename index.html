@@ -2705,7 +2705,7 @@ function updateIncentiveCell(id, field, value) {
   if (field === 'amount' && !row.bonus) {
     var rate = Number(DATA.incentiveRates[row.source]);
     var amount = Number(value);
-    if (rate && amount) row.bonus = String(Math.round(incentiveExTax(amount) * rate / 100));
+    if (rate && amount) row.bonus = String(Math.round(amount * rate / 100));
   }
   save();
   renderManagersTab();
@@ -2720,7 +2720,7 @@ function updateIncentiveRate(value) {
     DATA.incentiveRows.forEach(function(r) {
       if (r.source !== currentIncentiveSource) return;
       var amount = Number(r.amount);
-      if (!r.bonus && amount) r.bonus = String(Math.round(incentiveExTax(amount) * rate / 100));
+      if (!r.bonus && amount) r.bonus = String(Math.round(amount * rate / 100));
     });
   }
   save();
@@ -2742,7 +2742,7 @@ function syncIncentiveRowsFromRecords(source) {
     row.hospital = rec.surgeryVenue || rec.consultationVenue || '';
     row.amount = rec.revenue || '';
     var syncRate = Number(DATA.incentiveRates[source]);
-    if (syncRate && row.amount) row.bonus = String(Math.round(incentiveExTax(row.amount) * syncRate / 100));
+    if (syncRate && row.amount) row.bonus = String(Math.round(Number(row.amount) * syncRate / 100));
     DATA.incentiveRows.push(row);
     added = true;
   });

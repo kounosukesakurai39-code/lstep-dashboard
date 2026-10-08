@@ -340,6 +340,7 @@
 
 <!-- グラフ -->
 <div class="panel active" id="panel-chart">
+  <div class="tab-row" id="chartBusinessTabs" style="margin:0 0 10px"></div>
   <div class="tab-row" id="chartSourceTabs" style="margin:0 0 16px"></div>
   <div class="kpi-row" id="kpiRow"></div>
   <div class="chart-row">
@@ -617,6 +618,16 @@ function formatAreaList(val) {
 }
 var lineChartInstance = null, statusPieInstance = null, increaseBarInstance = null;
 var chartFilterSource = '';
+var chartFilterBusiness = '';
+
+function chartSourceBusiness(source) {
+  return /深町|藤原|武田|ヤーシー|江南/.test(source || '') ? '江南' : 'Navi';
+}
+function setChartFilterBusiness(b) {
+  chartFilterBusiness = b;
+  chartFilterSource = '';
+  renderCharts();
+}
 var increaseChartBusiness = '__ALL__';
 var dashboardYear = null;
 var csvParsed = null; // { headers, rows }
@@ -1069,8 +1080,17 @@ function refreshCurrentView() {
 
 // ── グラフ ──────────────────────────────────────────
 function renderChartSourceTabs() {
+  var bel = document.getElementById('chartBusinessTabs');
+  if (bel) {
+    var bizOpts = ['', 'Navi', '江南'];
+    bel.innerHTML = bizOpts.map(function(b) {
+      var active = b === chartFilterBusiness ? ' active' : '';
+      return '<button class="tab' + active + '" onclick="setChartFilterBusiness(\'' + b + '\')">' + esc(b || '全体') + '</button>';
+    }).join('');
+  }
   var el = document.getElementById('chartSourceTabs');
-  var options = [''].concat(DATA.sources);
+  var srcList = DATA.sources.filter(function(s) { return !chartFilterBusiness || chartSourceBusiness(s) === chartFilterBusiness; });
+  var options = [''].concat(srcList);
   el.innerHTML = options.map(function(s) {
     var active = s === chartFilterSource ? ' active' : '';
     var arg = s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -1198,7 +1218,11 @@ function renderIncreaseBarChart() {
 
 function renderCharts() {
   renderChartSourceTabs();
-  var records = chartFilterSource ? DATA.records.filter(function(r) { return r.source === chartFilterSource; }) : DATA.records;
+  var records = DATA.records.filter(function(r) {
+    if (chartFilterBusiness && chartSourceBusiness(r.source) !== chartFilterBusiness) return false;
+    if (chartFilterSource && r.source !== chartFilterSource) return false;
+    return true;
+  });
 
   var total = records.filter(function(r) { return r.status !== 'ブロック'; }).length;
   var byStatus = {};

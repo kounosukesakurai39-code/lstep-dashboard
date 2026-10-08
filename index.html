@@ -89,7 +89,7 @@
   .incentive-table th, .incentive-table td { border: 1px solid #d9e0ea; padding: 0; }
   .incentive-table th { background: #eaf2f9; color: #163a5c; font-weight: 600; padding: 8px 10px; white-space: nowrap; }
   .incentive-input { width: 130px; border: none; background: transparent; padding: 8px 10px; font: inherit; color: #1f2b3d; text-align: center; }
-  .incentive-computed { background: #f6f9fc; color: #55677e; font-weight: 600; text-align: center; }
+  .incentive-computed { background: #f6f9fc; color: #55677e; font-weight: 600; text-align: center; min-width: 130px; white-space: nowrap; padding: 8px 10px; }
   .incentive-table th { text-align: center; }
   .incentive-table td.num { text-align: center; }
   .incentive-table td.cat-label { text-align: center; }
@@ -2646,9 +2646,9 @@ function updateIncentiveRate(value) {
 function syncIncentiveRowsFromRecords(source) {
   var linkedRecordIds = {};
   DATA.incentiveRows.forEach(function(r) { if (r.source === source && r.recordId) linkedRecordIds[r.recordId] = true; });
-  var traveled = DATA.records.filter(function(r) { return r.source === source && isTravelStatus(r.status); });
+  var closed = DATA.records.filter(function(r) { return r.source === source && isClosedStatus(r.status) && r.status !== '交渉中'; });
   var added = false;
-  traveled.forEach(function(rec) {
+  closed.forEach(function(rec) {
     if (linkedRecordIds[rec.id]) return;
     var row = { id: DATA.nextIncentiveId++, source: source, recordId: rec.id };
     INCENTIVE_COLUMNS.forEach(function(c) { if (!c.computed) row[c.key] = ''; });
@@ -2825,7 +2825,7 @@ function renderManagersTab() {
           var val = esc(r[c.key] || '');
           return '<td><input type="text" class="incentive-input" value="' + val + '" onchange="updateIncentiveCell(' + r.id + ',\'' + c.key + '\',this.value)"></td>';
         }).join('');
-        var autoBadge = r.recordId ? '<span class="incentive-auto-badge" title="渡韓済のためインフルエンサータブから自動追加">自動</span>' : '';
+        var autoBadge = r.recordId ? '<span class="incentive-auto-badge" title="成約確定のためインフルエンサータブから自動追加">自動</span>' : '';
         return '<tr><td class="cat-label">' + esc(r.source) + '</td><td class="cat-label">' + esc(getSourcePlatform(r.source)) + '</td>' + cells + '<td>' + autoBadge + '<button class="incentive-del" onclick="deleteIncentiveRow(' + r.id + ')" title="削除">×</button></td></tr>';
       }).join('');
       groupMainHtml = '<button class="incentive-back-btn" onclick="backToIncentiveGroupSummary()">← 集計に戻る</button>' + incentiveFilterBarHtml() + '<div class="table-wrap"><table class="incentive-table"><thead>' + thead2 + '</thead><tbody>' + bodyRows2 + '</tbody></table></div>';
@@ -2975,7 +2975,7 @@ function renderManagersTab() {
         var val = esc(r[c.key] || '');
         return '<td><input type="text" class="incentive-input" value="' + val + '" onchange="updateIncentiveCell(' + r.id + ',\'' + c.key + '\',this.value)"></td>';
       }).join('');
-      var autoBadge = r.recordId ? '<span class="incentive-auto-badge" title="渡韓済のためインフルエンサータブから自動追加">自動</span>' : '';
+      var autoBadge = r.recordId ? '<span class="incentive-auto-badge" title="成約確定のためインフルエンサータブから自動追加">自動</span>' : '';
       return '<tr>' + cells + '<td>' + autoBadge + '<button class="incentive-del" onclick="deleteIncentiveRow(' + r.id + ')" title="削除">×</button></td></tr>';
     }).join('');
     mainHtml = '<button class="incentive-back-btn" onclick="backToIncentiveSummary()">← 集計に戻る</button>' + incentiveFilterBarHtml() + '<div class="table-wrap"><table class="incentive-table"><thead>' + thead + '</thead><tbody>' + bodyRows + '</tbody></table></div>';

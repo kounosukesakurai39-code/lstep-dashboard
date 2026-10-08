@@ -2448,7 +2448,7 @@ function renderSnapshotTable() {
 function showIncentiveSource(name) {
   currentIncentiveSource = name;
   currentIncentiveGroup = null;
-  currentIncentiveMonth = null;
+  currentIncentiveMonth = '__ALL__';
   currentIncentivePlatform = null;
   currentIncentiveGroupMonth = null;
   currentIncentiveMonthPlatformBreakdown = null;
@@ -2457,6 +2457,11 @@ function showIncentiveSource(name) {
 
 function showIncentiveMonth(month) {
   currentIncentiveMonth = month;
+  renderManagersTab();
+}
+
+function showIncentiveMonthlySummary() {
+  currentIncentiveMonth = null;
   renderManagersTab();
 }
 
@@ -2494,7 +2499,7 @@ function fillContinuousMonths(groupsObj) {
   var result = [];
   while (y < endY || (y === endY && m <= endM)) {
     var key = y + '-' + pad(m);
-    if (!groupsObj[key]) groupsObj[key] = { count: 0, amount: 0, bonus: 0 };
+    if (!groupsObj[key]) groupsObj[key] = newIncentiveAcc();
     result.push(key);
     m++;
     if (m > 12) { m = 1; y++; }
@@ -2593,15 +2598,44 @@ var INCENTIVE_COLUMNS = [
   { key: 'travelDate', label: '渡韓予定日' },
   { key: 'surgeryDate', label: '手術日' },
   { key: 'amount', label: '金額' },
-  { key: 'amountExTax', label: '税抜金額', computed: true },
-  { key: 'bonus', label: '賞与' },
-  { key: 'payment', label: '支払い' }
+  { key: 'amountExTax', label: '手術費用（税抜）', computed: true },
+  { key: 'bonus', label: 'インセンティブ' },
+  { key: 'other', label: 'その他' },
+  { key: 'payTotal', label: '支払い合計', computed: true }
 ];
+
+function incentiveComputedValue(key, r) {
+  if (key === 'amountExTax') return incentiveExTax(r.amount);
+  if (key === 'payTotal') return incentivePayTotal(r);
+  return 0;
+}
 
 function incentiveExTax(amount) {
   var a = Number(amount);
   if (!a) return 0;
   return Math.round(a / 1.1);
+}
+
+function incentivePayTotal(r) {
+  return (Number(r.bonus) || 0) + (Number(r.other) || 0);
+}
+
+function newIncentiveAcc() { return { count: 0, exTax: 0, bonus: 0, other: 0, pay: 0 }; }
+function accIncentiveRow(g, r) {
+  g.count++;
+  g.exTax += incentiveExTax(r.amount);
+  g.bonus += Number(r.bonus) || 0;
+  g.other += Number(r.other) || 0;
+  g.pay += incentivePayTotal(r);
+}
+function incentiveAccFromRows(list) {
+  var g = newIncentiveAcc();
+  list.forEach(function(r) { accIncentiveRow(g, r); });
+  return g;
+}
+var INCENTIVE_SUMMARY_HEAD = '<th>件数</th><th>手術費用（税抜）</th><th>インセンティブ</th><th>その他</th><th>支払い合計</th>';
+function incentiveSummaryCells(g) {
+  return '<td class="num">' + g.count + '</td><td class="num">' + formatRevenue(g.exTax) + '</td><td class="num">' + formatRevenue(g.bonus) + '</td><td class="num">' + formatRevenue(g.other) + '</td><td class="num">' + formatRevenue(g.pay) + '</td>';
 }
 
 function addIncentiveRow() {
@@ -2819,8 +2853,8 @@ function renderManagersTab() {
       var bodyRows2 = platRowsData.map(function(r) {
         var cells = INCENTIVE_COLUMNS.map(function(c) {
           if (c.computed) {
-            var ex = incentiveExTax(r.amount);
-            return '<td class="num incentive-computed">' + (ex ? ex.toLocaleString('ja-JP') : '') + '</td>';
+            var cv = incentiveComputedValue(c.key, r);
+            return '<td class="num incentive-computed">' + (cv ? formatRevenue(cv) : '') + '</td>';
           }
           var val = esc(r[c.key] || '');
           return '<td><input type="text" class="incentive-input" value="' + val + '" onchange="updateIncentiveCell(' + r.id + ',\'' + c.key + '\',this.value)"></td>';
@@ -2839,23 +2873,19 @@ function renderManagersTab() {
       var mpPlatGroups = {};
       monthScopedRows.forEach(function(r) {
         var p = getSourcePlatform(r.source);
-        if (!mpPlatGroups[p]) mpPlatGroups[p] = { count: 0, amount: 0, bonus: 0 };
-        mpPlatGroups[p].count++;
-        mpPlatGroups[p].amount += Number(r.amount) || 0;
-        mpPlatGroups[p].bonus += Number(r.bonus) || 0;
+        if (!mpPlatGroups[p]) mpPlatGroups[p] = newIncentiveAcc();
+        accIncentiveRow(mpPlatGroups[p], r);
       });
       var MP_PLATFORM_ORDER = ['X', 'Instagram', 'YouTube', 'TikTok', 'Threads', 'note', 'その他'];
-      MP_PLATFORM_ORDER.forEach(function(p) { if (!mpPlatGroups[p]) mpPlatGroups[p] = { count: 0, amount: 0, bonus: 0 }; });
-      var mpTotalCount = monthScopedRows.length;
-      var mpTotalAmount = monthScopedRows.reduce(function(s, r) { return s + (Number(r.amount) || 0); }, 0);
-      var mpTotalBonus = monthScopedRows.reduce(function(s, r) { return s + (Number(r.bonus) || 0); }, 0);
+      MP_PLATFORM_ORDER.forEach(function(p) { if (!mpPlatGroups[p]) mpPlatGroups[p] = newIncentiveAcc(); });
+      var mpTotal = incentiveAccFromRows(monthScopedRows);
       var mpRows = MP_PLATFORM_ORDER.map(function(p) {
         var g = mpPlatGroups[p];
         var pArg = p.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        return '<tr><td class="cat-label">' + esc(p) + '</td><td class="num">' + g.count + '</td><td class="num">' + formatRevenue(g.amount) + '</td><td class="num">' + formatRevenue(g.bonus) + '</td><td><button class="incentive-detail-btn" onclick="showIncentivePlatformInMonth(\'' + pArg + '\')">詳細</button></td></tr>';
+        return '<tr><td class="cat-label">' + esc(p) + '</td>' + incentiveSummaryCells(g) + '<td><button class="incentive-detail-btn" onclick="showIncentivePlatformInMonth(\'' + pArg + '\')">詳細</button></td></tr>';
       }).join('');
-      groupMainHtml = '<button class="incentive-back-btn" onclick="backToIncentiveGroupTop()">← 集計に戻る</button><div class="table-wrap"><table class="incentive-table"><thead><tr><th>プラットフォーム</th><th>件数</th><th>金額合計</th><th>インセンティブ合計</th><th></th></tr></thead><tbody>' + mpRows +
-        '<tr class="incentive-total-row"><td class="cat-label">合計</td><td class="num">' + mpTotalCount + '</td><td class="num">' + formatRevenue(mpTotalAmount) + '</td><td class="num">' + formatRevenue(mpTotalBonus) + '</td><td></td></tr>' +
+      groupMainHtml = '<button class="incentive-back-btn" onclick="backToIncentiveGroupTop()">← 集計に戻る</button><div class="table-wrap"><table class="incentive-table"><thead><tr><th>プラットフォーム</th>' + INCENTIVE_SUMMARY_HEAD + '<th></th></tr></thead><tbody>' + mpRows +
+        '<tr class="incentive-total-row"><td class="cat-label">合計</td>' + incentiveSummaryCells(mpTotal) + '<td></td></tr>' +
         '</tbody></table></div>';
       var mpMonthLabel = mpMonth === '未定' ? '未定' : formatMonth(mpMonth);
       groupHeadingHtml = '<div class="incentive-head"><p class="incentive-title">' + groupTitleBase + '　' + esc(mpMonthLabel) + 'のプラットフォーム別内訳</p></div>';
@@ -2863,36 +2893,30 @@ function renderManagersTab() {
       var platGroups = {};
       groupRows.forEach(function(r) {
         var p = getSourcePlatform(r.source);
-        if (!platGroups[p]) platGroups[p] = { count: 0, amount: 0, bonus: 0 };
-        platGroups[p].count++;
-        platGroups[p].amount += Number(r.amount) || 0;
-        platGroups[p].bonus += Number(r.bonus) || 0;
+        if (!platGroups[p]) platGroups[p] = newIncentiveAcc();
+        accIncentiveRow(platGroups[p], r);
       });
       var PLATFORM_ORDER = ['X', 'Instagram', 'YouTube', 'TikTok', 'Threads', 'note', 'その他'];
-      PLATFORM_ORDER.forEach(function(p) { if (!platGroups[p]) platGroups[p] = { count: 0, amount: 0, bonus: 0 }; });
+      PLATFORM_ORDER.forEach(function(p) { if (!platGroups[p]) platGroups[p] = newIncentiveAcc(); });
       var platKeys = PLATFORM_ORDER.slice();
 
-      var gTotalCount = groupRows.length;
-      var gTotalAmount = groupRows.reduce(function(s, r) { return s + (Number(r.amount) || 0); }, 0);
-      var gTotalBonus = groupRows.reduce(function(s, r) { return s + (Number(r.bonus) || 0); }, 0);
+      var gTotal = incentiveAccFromRows(groupRows);
 
       var platRows = platKeys.map(function(p) {
         var g = platGroups[p];
         var pArg = p.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        return '<tr><td class="cat-label">' + esc(p) + '</td><td class="num">' + g.count + '</td><td class="num">' + formatRevenue(g.amount) + '</td><td class="num">' + formatRevenue(g.bonus) + '</td><td><button class="incentive-detail-btn" onclick="showIncentivePlatform(\'' + pArg + '\')">詳細</button></td></tr>';
+        return '<tr><td class="cat-label">' + esc(p) + '</td>' + incentiveSummaryCells(g) + '<td><button class="incentive-detail-btn" onclick="showIncentivePlatform(\'' + pArg + '\')">詳細</button></td></tr>';
       }).join('');
 
-      var platTableHtml = '<div class="table-wrap"><table class="incentive-table"><thead><tr><th>プラットフォーム</th><th>件数</th><th>金額合計</th><th>インセンティブ合計</th><th></th></tr></thead><tbody>' + platRows +
-        '<tr class="incentive-total-row"><td class="cat-label">合計</td><td class="num">' + gTotalCount + '</td><td class="num">' + formatRevenue(gTotalAmount) + '</td><td class="num">' + formatRevenue(gTotalBonus) + '</td><td></td></tr>' +
+      var platTableHtml = '<div class="table-wrap"><table class="incentive-table"><thead><tr><th>プラットフォーム</th>' + INCENTIVE_SUMMARY_HEAD + '<th></th></tr></thead><tbody>' + platRows +
+        '<tr class="incentive-total-row"><td class="cat-label">合計</td>' + incentiveSummaryCells(gTotal) + '<td></td></tr>' +
         '</tbody></table></div>';
 
       var gMonthGroups = {};
       groupRows.forEach(function(r) {
         var ym = extractYearMonth(r.surgeryDate) || '未定';
-        if (!gMonthGroups[ym]) gMonthGroups[ym] = { count: 0, amount: 0, bonus: 0 };
-        gMonthGroups[ym].count++;
-        gMonthGroups[ym].amount += Number(r.amount) || 0;
-        gMonthGroups[ym].bonus += Number(r.bonus) || 0;
+        if (!gMonthGroups[ym]) gMonthGroups[ym] = newIncentiveAcc();
+        accIncentiveRow(gMonthGroups[ym], r);
       });
       var gMonthKeys = groupRows.length === 0 ? [] : fillContinuousMonths(gMonthGroups);
 
@@ -2900,11 +2924,11 @@ function renderManagersTab() {
         var g = gMonthGroups[k];
         var kArg = k.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         var label = k === '未定' ? '未定' : formatMonth(k);
-        return '<tr><td class="cat-label">' + esc(label) + '</td><td class="num">' + g.count + '</td><td class="num">' + formatRevenue(g.amount) + '</td><td class="num">' + formatRevenue(g.bonus) + '</td><td class="incentive-btn-group"><button class="incentive-detail-btn" onclick="showIncentiveMonthPlatforms(\'' + kArg + '\')">プラットフォーム内訳</button><button class="incentive-detail-btn" onclick="showIncentiveGroupMonth(\'' + kArg + '\')">詳細</button></td></tr>';
+        return '<tr><td class="cat-label">' + esc(label) + '</td>' + incentiveSummaryCells(g) + '<td class="incentive-btn-group"><button class="incentive-detail-btn" onclick="showIncentiveMonthPlatforms(\'' + kArg + '\')">プラットフォーム内訳</button><button class="incentive-detail-btn" onclick="showIncentiveGroupMonth(\'' + kArg + '\')">詳細</button></td></tr>';
       }).join('');
 
-      var monthTableHtml = '<div class="table-wrap"><table class="incentive-table"><thead><tr><th>手術月</th><th>件数</th><th>金額合計</th><th>インセンティブ合計</th><th></th></tr></thead><tbody>' + monthRowsHtml +
-        '<tr class="incentive-total-row"><td class="cat-label">合計</td><td class="num">' + gTotalCount + '</td><td class="num">' + formatRevenue(gTotalAmount) + '</td><td class="num">' + formatRevenue(gTotalBonus) + '</td><td></td></tr>' +
+      var monthTableHtml = '<div class="table-wrap"><table class="incentive-table"><thead><tr><th>手術月</th>' + INCENTIVE_SUMMARY_HEAD + '<th></th></tr></thead><tbody>' + monthRowsHtml +
+        '<tr class="incentive-total-row"><td class="cat-label">合計</td>' + incentiveSummaryCells(gTotal) + '<td></td></tr>' +
         '</tbody></table></div>';
 
       var summaryTabsHtml = '<div class="incentive-view-tabs">' +
@@ -2933,34 +2957,34 @@ function renderManagersTab() {
   var rateVal = esc(DATA.incentiveRates[currentIncentiveSource] || '');
   var rateHtml = '<span class="incentive-rate">歩合 <input type="number" class="incentive-rate-input" value="' + rateVal + '" placeholder="0" onchange="updateIncentiveRate(this.value)">%</span>';
 
+  var perSourceTabs = '<div class="incentive-view-tabs">' +
+    '<button class="incentive-view-tab' + (currentIncentiveMonth !== null ? ' active' : '') + '" onclick="showIncentiveMonth(\'__ALL__\')">一覧</button>' +
+    '<button class="incentive-view-tab' + (currentIncentiveMonth === null ? ' active' : '') + '" onclick="showIncentiveMonthlySummary()">月別</button>' +
+    '</div>';
+
   var mainHtml;
-  if (!currentIncentiveMonth) {
+  if (currentIncentiveMonth === null) {
     var monthGroups = {};
     rows.forEach(function(r) {
       var ym = extractYearMonth(r.surgeryDate) || '未定';
-      if (!monthGroups[ym]) monthGroups[ym] = { count: 0, amount: 0, bonus: 0 };
-      monthGroups[ym].count++;
-      monthGroups[ym].amount += Number(r.amount) || 0;
-      monthGroups[ym].bonus += Number(r.bonus) || 0;
+      if (!monthGroups[ym]) monthGroups[ym] = newIncentiveAcc();
+      accIncentiveRow(monthGroups[ym], r);
     });
     var monthKeys = rows.length === 0 ? [] : fillContinuousMonths(monthGroups);
-
-    var totalCount = rows.length;
-    var totalAmount = rows.reduce(function(s, r) { return s + (Number(r.amount) || 0); }, 0);
-    var totalBonus = rows.reduce(function(s, r) { return s + (Number(r.bonus) || 0); }, 0);
+    var total = incentiveAccFromRows(rows);
 
     var summaryRows = monthKeys.map(function(k) {
       var g = monthGroups[k];
       var kArg = k.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       var label = k === '未定' ? '未定' : formatMonth(k);
-      return '<tr><td class="cat-label">' + esc(label) + '</td><td class="num">' + g.count + '</td><td class="num">' + formatRevenue(g.amount) + '</td><td class="num">' + formatRevenue(g.bonus) + '</td><td><button class="incentive-detail-btn" onclick="showIncentiveMonth(\'' + kArg + '\')">詳細</button></td></tr>';
+      return '<tr><td class="cat-label">' + esc(label) + '</td>' + incentiveSummaryCells(g) + '<td><button class="incentive-detail-btn" onclick="showIncentiveMonth(\'' + kArg + '\')">詳細</button></td></tr>';
     }).join('');
 
     if (monthKeys.length === 0) {
-      mainHtml = '<p class="empty">まだ行がありません。「＋ 行追加」で入力を始められます。</p>';
+      mainHtml = perSourceTabs + '<p class="empty">まだ行がありません。「＋ 行追加」で入力を始められます。</p>';
     } else {
-      mainHtml = '<div class="table-wrap"><table class="incentive-table"><thead><tr><th>手術月</th><th>件数</th><th>金額合計</th><th>インセンティブ合計</th><th></th></tr></thead><tbody>' + summaryRows +
-        '<tr class="incentive-total-row"><td class="cat-label">合計</td><td class="num">' + totalCount + '</td><td class="num">' + formatRevenue(totalAmount) + '</td><td class="num">' + formatRevenue(totalBonus) + '</td><td></td></tr>' +
+      mainHtml = perSourceTabs + '<div class="table-wrap"><table class="incentive-table"><thead><tr><th>手術月</th>' + INCENTIVE_SUMMARY_HEAD + '<th></th></tr></thead><tbody>' + summaryRows +
+        '<tr class="incentive-total-row"><td class="cat-label">合計</td>' + incentiveSummaryCells(total) + '<td></td></tr>' +
         '</tbody></table></div>';
     }
   } else {
@@ -2969,22 +2993,22 @@ function renderManagersTab() {
     var bodyRows = targetRows.map(function(r) {
       var cells = INCENTIVE_COLUMNS.map(function(c) {
         if (c.computed) {
-          var ex = incentiveExTax(r.amount);
-          return '<td class="num incentive-computed">' + (ex ? ex.toLocaleString('ja-JP') : '') + '</td>';
-        }
+            var cv = incentiveComputedValue(c.key, r);
+            return '<td class="num incentive-computed">' + (cv ? formatRevenue(cv) : '') + '</td>';
+          }
         var val = esc(r[c.key] || '');
         return '<td><input type="text" class="incentive-input" value="' + val + '" onchange="updateIncentiveCell(' + r.id + ',\'' + c.key + '\',this.value)"></td>';
       }).join('');
       var autoBadge = r.recordId ? '<span class="incentive-auto-badge" title="渡韓済のためインフルエンサータブから自動追加">自動</span>' : '';
       return '<tr>' + cells + '<td>' + autoBadge + '<button class="incentive-del" onclick="deleteIncentiveRow(' + r.id + ')" title="削除">×</button></td></tr>';
     }).join('');
-    mainHtml = '<button class="incentive-back-btn" onclick="backToIncentiveSummary()">← 集計に戻る</button>' + incentiveFilterBarHtml() + '<div class="table-wrap"><table class="incentive-table"><thead>' + thead + '</thead><tbody>' + bodyRows + '</tbody></table></div>';
+    var monthBackBtn = (currentIncentiveMonth !== '__ALL__') ? '<button class="incentive-back-btn" onclick="showIncentiveMonthlySummary()">← 月別に戻る</button>' : '';
+    mainHtml = perSourceTabs + monthBackBtn + incentiveFilterBarHtml() + '<div class="table-wrap"><table class="incentive-table"><thead>' + thead + '</thead><tbody>' + bodyRows + '</tbody></table></div>';
   }
 
   var monthLabel = currentIncentiveMonth === '__ALL__' ? '全件' : (currentIncentiveMonth === '未定' ? '未定' : (currentIncentiveMonth ? formatMonth(currentIncentiveMonth) : ''));
-  var titleText = esc(currentIncentiveSource) + (currentIncentiveMonth ? '　' + monthLabel + 'のインセンティブ表' : 'のインセンティブ表（月別集計）');
-  var detailBtnHtml = !currentIncentiveMonth ? '<button class="incentive-detail-btn" onclick="showIncentiveMonth(\'__ALL__\')">詳細</button>' : '';
-  var headingHtml = '<div class="incentive-head"><p class="incentive-title">' + titleText + '</p>' + detailBtnHtml + rateHtml + '<button class="incentive-add" onclick="addIncentiveRow()">＋ 行追加</button></div>';
+  var titleText = esc(currentIncentiveSource) + (currentIncentiveMonth === null ? 'のインセンティブ表（月別集計）' : (currentIncentiveMonth === '__ALL__' ? 'のインセンティブ表' : '　' + monthLabel + 'のインセンティブ表'));
+  var headingHtml = '<div class="incentive-head"><p class="incentive-title">' + titleText + '</p>' + rateHtml + '<button class="incentive-add" onclick="addIncentiveRow()">＋ 行追加</button></div>';
 
   area.innerHTML = '<div class="snap-layout">' + sidebarHtml + '<div class="snap-main">' + headingHtml + mainHtml + '</div></div>';
 }

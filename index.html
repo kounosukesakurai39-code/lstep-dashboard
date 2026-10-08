@@ -89,6 +89,7 @@
   .incentive-table th, .incentive-table td { border: 1px solid #d9e0ea; padding: 0; }
   .incentive-table th { background: #eaf2f9; color: #163a5c; font-weight: 600; padding: 8px 10px; white-space: nowrap; }
   .incentive-input { width: 130px; border: none; background: transparent; padding: 8px 10px; font: inherit; color: #1f2b3d; text-align: center; }
+  .incentive-computed { background: #f6f9fc; color: #55677e; font-weight: 600; text-align: center; }
   .incentive-table th { text-align: center; }
   .incentive-table td.num { text-align: center; }
   .incentive-table td.cat-label { text-align: center; }
@@ -2592,14 +2593,21 @@ var INCENTIVE_COLUMNS = [
   { key: 'travelDate', label: '渡韓予定日' },
   { key: 'surgeryDate', label: '手術日' },
   { key: 'amount', label: '金額' },
+  { key: 'amountExTax', label: '税抜金額', computed: true },
   { key: 'bonus', label: '賞与' },
   { key: 'payment', label: '支払い' }
 ];
 
+function incentiveExTax(amount) {
+  var a = Number(amount);
+  if (!a) return 0;
+  return Math.round(a / 1.1);
+}
+
 function addIncentiveRow() {
   if (!currentIncentiveSource) return;
   var row = { id: DATA.nextIncentiveId++, source: currentIncentiveSource };
-  INCENTIVE_COLUMNS.forEach(function(c) { row[c.key] = ''; });
+  INCENTIVE_COLUMNS.forEach(function(c) { if (!c.computed) row[c.key] = ''; });
   DATA.incentiveRows.push(row);
   save();
   currentIncentiveMonth = '__ALL__';
@@ -2613,7 +2621,7 @@ function updateIncentiveCell(id, field, value) {
   if (field === 'amount' && !row.bonus) {
     var rate = Number(DATA.incentiveRates[row.source]);
     var amount = Number(value);
-    if (rate && amount) row.bonus = String(Math.round(amount * rate / 100));
+    if (rate && amount) row.bonus = String(Math.round(incentiveExTax(amount) * rate / 100));
   }
   save();
   renderManagersTab();
@@ -2628,7 +2636,7 @@ function updateIncentiveRate(value) {
     DATA.incentiveRows.forEach(function(r) {
       if (r.source !== currentIncentiveSource) return;
       var amount = Number(r.amount);
-      if (!r.bonus && amount) r.bonus = String(Math.round(amount * rate / 100));
+      if (!r.bonus && amount) r.bonus = String(Math.round(incentiveExTax(amount) * rate / 100));
     });
   }
   save();
@@ -2643,14 +2651,14 @@ function syncIncentiveRowsFromRecords(source) {
   traveled.forEach(function(rec) {
     if (linkedRecordIds[rec.id]) return;
     var row = { id: DATA.nextIncentiveId++, source: source, recordId: rec.id };
-    INCENTIVE_COLUMNS.forEach(function(c) { row[c.key] = ''; });
+    INCENTIVE_COLUMNS.forEach(function(c) { if (!c.computed) row[c.key] = ''; });
     row.join = rec.registeredAt || '';
     row.name = rec.name || '';
     row.region = rec.location || '';
     row.hospital = rec.surgeryVenue || rec.consultationVenue || '';
     row.amount = rec.revenue || '';
     var syncRate = Number(DATA.incentiveRates[source]);
-    if (syncRate && row.amount) row.bonus = String(Math.round(Number(row.amount) * syncRate / 100));
+    if (syncRate && row.amount) row.bonus = String(Math.round(incentiveExTax(row.amount) * syncRate / 100));
     DATA.incentiveRows.push(row);
     added = true;
   });
@@ -2810,6 +2818,10 @@ function renderManagersTab() {
       var thead2 = '<tr><th>アカウント</th><th>プラットフォーム</th>' + INCENTIVE_COLUMNS.map(function(c) { return '<th>' + esc(c.label) + '</th>'; }).join('') + '<th></th></tr>';
       var bodyRows2 = platRowsData.map(function(r) {
         var cells = INCENTIVE_COLUMNS.map(function(c) {
+          if (c.computed) {
+            var ex = incentiveExTax(r.amount);
+            return '<td class="num incentive-computed">' + (ex ? ex.toLocaleString('ja-JP') : '') + '</td>';
+          }
           var val = esc(r[c.key] || '');
           return '<td><input type="text" class="incentive-input" value="' + val + '" onchange="updateIncentiveCell(' + r.id + ',\'' + c.key + '\',this.value)"></td>';
         }).join('');
@@ -2956,6 +2968,10 @@ function renderManagersTab() {
     var thead = '<tr>' + INCENTIVE_COLUMNS.map(function(c) { return '<th>' + esc(c.label) + '</th>'; }).join('') + '<th></th></tr>';
     var bodyRows = targetRows.map(function(r) {
       var cells = INCENTIVE_COLUMNS.map(function(c) {
+        if (c.computed) {
+          var ex = incentiveExTax(r.amount);
+          return '<td class="num incentive-computed">' + (ex ? ex.toLocaleString('ja-JP') : '') + '</td>';
+        }
         var val = esc(r[c.key] || '');
         return '<td><input type="text" class="incentive-input" value="' + val + '" onchange="updateIncentiveCell(' + r.id + ',\'' + c.key + '\',this.value)"></td>';
       }).join('');

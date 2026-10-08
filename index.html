@@ -90,10 +90,16 @@
   .incentive-table th { background: #eaf2f9; color: #163a5c; font-weight: 600; padding: 8px 10px; white-space: nowrap; }
   .incentive-input { width: 130px; border: none; background: transparent; padding: 8px 10px; font: inherit; color: #1f2b3d; text-align: center; }
   .incentive-computed { background: #f6f9fc; color: #55677e; font-weight: 600; text-align: center; min-width: 130px; white-space: nowrap; padding: 8px 10px; }
-  .inc-col-bonus, .inc-col-bonus input { color: #1f8a4c; font-weight: 600; }
-  .inc-col-other, .inc-col-other input { color: #c47f17; font-weight: 600; }
-  .inc-col-pay { color: #14548a !important; font-weight: 700; background: #eef4fa !important; }
-  td.inc-col-bonus, td.inc-col-other { background: #fcfdff; }
+  .cur-sym { font-size: 0.82em; font-weight: 700; margin-right: 2px; opacity: 0.85; }
+  .incentive-input.has-cur { width: 96px; padding-left: 2px; }
+  .inc-col-bonus, .inc-col-bonus input, .inc-col-bonus .cur-sym { color: #1f8a4c !important; font-weight: 600; }
+  .inc-col-other, .inc-col-other input, .inc-col-other .cur-sym { color: #c47f17 !important; font-weight: 600; }
+  .inc-col-extax, .inc-col-extax input, .inc-col-extax .cur-sym { color: #2a6db0 !important; }
+  .inc-col-pay { color: #7a3fb0 !important; font-weight: 700; }
+  td.inc-col-bonus, th.inc-col-bonus { background: #eef8f1 !important; }
+  td.inc-col-other, th.inc-col-other { background: #fdf5e9 !important; }
+  td.inc-col-pay, th.inc-col-pay { background: #f4eefb !important; }
+  td.inc-col-extax, th.inc-col-extax { background: #eef4fa !important; }
   .incentive-table th { text-align: center; }
   .incentive-table td.num { text-align: center; }
   .incentive-table td.cat-label { text-align: center; }
@@ -2628,6 +2634,12 @@ function incentiveColClass(key) {
   return '';
 }
 
+function incentiveCurSymbol(key) {
+  if (key === 'amount') return '₩';
+  if (key === 'bonus' || key === 'other') return '¥';
+  return '';
+}
+
 function incentiveCellHtml(c, r) {
   var cls = incentiveColClass(c.key);
   if (c.computed) {
@@ -2636,7 +2648,10 @@ function incentiveCellHtml(c, r) {
     return '<td class="num incentive-computed ' + cls + '">' + (cv ? txt : '') + '</td>';
   }
   var val = esc(r[c.key] || '');
-  return '<td class="' + cls + '"><input type="text" class="incentive-input" value="' + val + '" onchange="updateIncentiveCell(' + r.id + ',\'' + c.key + '\',this.value)"></td>';
+  var sym = incentiveCurSymbol(c.key);
+  var input = '<input type="text" class="incentive-input' + (sym ? ' has-cur' : '') + '" value="' + val + '" onchange="updateIncentiveCell(' + r.id + ',\'' + c.key + '\',this.value)">';
+  var inner = sym ? ('<span class="cur-sym">' + sym + '</span>' + input) : input;
+  return '<td class="' + cls + '">' + inner + '</td>';
 }
 
 function incentiveExTax(amount) {
@@ -2662,7 +2677,7 @@ function incentiveAccFromRows(list) {
   list.forEach(function(r) { accIncentiveRow(g, r); });
   return g;
 }
-var INCENTIVE_SUMMARY_HEAD = '<th>件数</th><th>手術費用（税抜）</th><th>インセンティブ</th><th>その他</th><th>支払い合計</th>';
+var INCENTIVE_SUMMARY_HEAD = '<th>件数</th><th class="inc-col-extax">手術費用（税抜）</th><th class="inc-col-bonus">インセンティブ</th><th class="inc-col-other">その他</th><th class="inc-col-pay">支払い合計</th>';
 function incentiveSummaryCells(g) {
   return '<td class="num">' + g.count + '</td>' +
     '<td class="num inc-col-extax">' + formatRevenue(g.exTax) + '</td>' +
@@ -2882,7 +2897,7 @@ function renderManagersTab() {
         return true;
       });
       var platRowsData = filterIncentiveRows(groupDetailRows);
-      var thead2 = '<tr><th>アカウント</th><th>プラットフォーム</th>' + INCENTIVE_COLUMNS.map(function(c) { return '<th>' + esc(c.label) + '</th>'; }).join('') + '<th></th></tr>';
+      var thead2 = '<tr><th>アカウント</th><th>プラットフォーム</th>' + INCENTIVE_COLUMNS.map(function(c) { return '<th class="' + incentiveColClass(c.key) + '">' + esc(c.label) + '</th>'; }).join('') + '<th></th></tr>';
       var bodyRows2 = platRowsData.map(function(r) {
         var cells = INCENTIVE_COLUMNS.map(function(c) { return incentiveCellHtml(c, r); }).join('');
         var autoBadge = r.recordId ? '<span class="incentive-auto-badge" title="渡韓済のためインフルエンサータブから自動追加">自動</span>' : '';
@@ -3015,7 +3030,7 @@ function renderManagersTab() {
     }
   } else {
     var targetRows = filterIncentiveRows(currentIncentiveMonth === '__ALL__' ? rows : rows.filter(function(r) { return (extractYearMonth(r.surgeryDate) || '未定') === currentIncentiveMonth; }));
-    var thead = '<tr>' + INCENTIVE_COLUMNS.map(function(c) { return '<th>' + esc(c.label) + '</th>'; }).join('') + '<th></th></tr>';
+    var thead = '<tr>' + INCENTIVE_COLUMNS.map(function(c) { return '<th class="' + incentiveColClass(c.key) + '">' + esc(c.label) + '</th>'; }).join('') + '<th></th></tr>';
     var bodyRows = targetRows.map(function(r) {
       var cells = INCENTIVE_COLUMNS.map(function(c) { return incentiveCellHtml(c, r); }).join('');
       var autoBadge = r.recordId ? '<span class="incentive-auto-badge" title="渡韓済のためインフルエンサータブから自動追加">自動</span>' : '';

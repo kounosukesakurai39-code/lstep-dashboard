@@ -476,7 +476,7 @@ var SUPABASE_ANON_KEY = 'sb_publishable_wAsepmixI4NC16C59B6kbA_RmxzoZ7H';
 var SUPABASE_TABLE_URL = SUPABASE_URL + '/rest/v1/app_data?id=eq.1';
 var SUPABASE_HEADERS = { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY };
 
-var DATA = { records: [], sources: [], statuses: [], venues: [], areas: [], nextId: 1, snapshots: [], nextSnapshotId: 1, incentiveRows: [], nextIncentiveId: 1, incentiveRates: {} };
+var DATA = { records: [], sources: [], statuses: [], venues: [], areas: [], nextId: 1, snapshots: [], nextSnapshotId: 1, incentiveRows: [], nextIncentiveId: 1, incentiveRates: {}, incentiveMonthlyOther: {} };
 var currentSnapshotBusiness = null;
 var expandedGroups = {};
 var expandedAggDetails = {};
@@ -826,6 +826,7 @@ function reload() {
       DATA.incentiveRows = Array.isArray(rec.incentiveRows) ? rec.incentiveRows : [];
       DATA.nextIncentiveId = rec.nextIncentiveId || (DATA.incentiveRows.length + 1);
       DATA.incentiveRates = (rec.incentiveRates && typeof rec.incentiveRates === 'object') ? rec.incentiveRates : {};
+      DATA.incentiveMonthlyOther = (rec.incentiveMonthlyOther && typeof rec.incentiveMonthlyOther === 'object') ? rec.incentiveMonthlyOther : {};
       populateFilters();
       renderList();
       showTab('chart');
@@ -2675,6 +2676,20 @@ function incentivePayTotal(r) {
   return (Number(r.bonus) || 0) + (Number(r.other) || 0);
 }
 
+// 月ごとの「その他」(ソース×手術月の固定額)
+function getMonthlyOther(source, month) {
+  var m = DATA.incentiveMonthlyOther[source];
+  return (m && m[month]) ? Number(m[month]) : 0;
+}
+function updateIncentiveMonthlyOther(source, month, value) {
+  var v = String(value).replace(/[^0-9.-]/g, '');
+  if (!DATA.incentiveMonthlyOther[source]) DATA.incentiveMonthlyOther[source] = {};
+  if (v === '' || Number(v) === 0) delete DATA.incentiveMonthlyOther[source][month];
+  else DATA.incentiveMonthlyOther[source][month] = v;
+  save();
+  renderManagersTab();
+}
+
 function newIncentiveAcc() { return { count: 0, exTax: 0, bonus: 0, other: 0, pay: 0 }; }
 function accIncentiveRow(g, r) {
   g.count++;
@@ -3022,16 +3037,38 @@ function renderManagersTab() {
     });
     var monthKeys = fillContinuousMonths(monthGroups);
     var total = incentiveAccFromRows(rows);
+    var srcArg = currentIncentiveSource.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    var totalMonthlyOther = 0;
 
     var summaryRows = monthKeys.map(function(k) {
-      var g = monthGroups[k];
+      var g = monthGroups[k] || newIncentiveAcc();
       var kArg = k.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       var label = k === '未定' ? '未定' : formatMonth(k);
-      return '<tr><td class="cat-label">' + esc(label) + '</td>' + incentiveSummaryCells(g) + '<td><button class="incentive-detail-btn" onclick="showIncentiveMonth(\'' + kArg + '\')">詳細</button></td></tr>';
+      var mo = getMonthlyOther(currentIncentiveSource, k);
+      totalMonthlyOther += mo;
+      var otherTotal = g.other + mo;
+      var payTotal = g.bonus + otherTotal;
+      var otherVal = otherTotal ? ('¥' + otherTotal.toLocaleString('ja-JP')) : '';
+      var otherInput = '<input type="text" class="incentive-input" value="' + otherVal + '" onfocus="incentiveStripNum(this)" onblur="incentiveFmtInput(this,\'¥\')" onchange="updateIncentiveMonthlyOther(\'' + srcArg + '\',\'' + kArg + '\',(Number(this.value.replace(/[^0-9.-]/g,\'\'))||0)-(' + g.other + '))">';
+      return '<tr><td class="cat-label">' + esc(label) + '</td>' +
+        '<td class="num">' + g.count + '</td>' +
+        '<td class="num inc-col-extax">' + formatRevenue(g.exTax) + '</td>' +
+        '<td class="num inc-col-bonus">' + formatYen(g.bonus) + '</td>' +
+        '<td class="inc-col-other">' + otherInput + '</td>' +
+        '<td class="num inc-col-pay">' + formatYen(payTotal) + '</td>' +
+        '<td><button class="incentive-detail-btn" onclick="showIncentiveMonth(\'' + kArg + '\')">詳細</button></td></tr>';
     }).join('');
 
+    var totOther = total.other + totalMonthlyOther;
+    var totPay = total.bonus + totOther;
+    var totalCells = '<td class="num">' + total.count + '</td>' +
+      '<td class="num inc-col-extax">' + formatRevenue(total.exTax) + '</td>' +
+      '<td class="num inc-col-bonus">' + formatYen(total.bonus) + '</td>' +
+      '<td class="num inc-col-other">' + formatYen(totOther) + '</td>' +
+      '<td class="num inc-col-pay">' + formatYen(totPay) + '</td>';
+
     mainHtml = perSourceTabs + '<div class="table-wrap"><table class="incentive-table"><thead><tr><th>手術月</th>' + INCENTIVE_SUMMARY_HEAD + '<th></th></tr></thead><tbody>' + summaryRows +
-      '<tr class="incentive-total-row"><td class="cat-label">合計</td>' + incentiveSummaryCells(total) + '<td></td></tr>' +
+      '<tr class="incentive-total-row"><td class="cat-label">合計</td>' + totalCells + '<td></td></tr>' +
       '</tbody></table></div>';
   } else {
     var targetRows = filterIncentiveRows(currentIncentiveMonth === '__ALL__' ? rows : rows.filter(function(r) { return (extractYearMonth(r.surgeryDate) || '未定') === currentIncentiveMonth; }));

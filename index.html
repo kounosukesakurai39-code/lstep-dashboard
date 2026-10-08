@@ -2970,7 +2970,7 @@ function renderManagersTab() {
         if (!gMonthGroups[ym]) gMonthGroups[ym] = newIncentiveAcc();
         accIncentiveRow(gMonthGroups[ym], r);
       });
-      var gMonthKeys = groupRows.length === 0 ? [] : fillContinuousMonths(gMonthGroups);
+      var gMonthKeys = fillContinuousMonths(gMonthGroups);
 
       var monthRowsHtml = gMonthKeys.map(function(k) {
         var g = gMonthGroups[k];
@@ -2988,9 +2988,7 @@ function renderManagersTab() {
         '<button class="incentive-view-tab' + (incentiveSummaryView === 'month' ? ' active' : '') + '" onclick="setIncentiveSummaryView(\'month\')">手術月別</button>' +
         '</div>';
 
-      groupMainHtml = groupRows.length === 0
-        ? '<p class="empty">まだ行がありません。左のアカウントを選んで「＋ 行追加」で入力を始められます。</p>'
-        : summaryTabsHtml + (incentiveSummaryView === 'month' ? monthTableHtml : platTableHtml);
+      groupMainHtml = summaryTabsHtml + (incentiveSummaryView === 'month' ? monthTableHtml : platTableHtml);
       groupHeadingHtml = '<div class="incentive-head"><p class="incentive-title">' + groupTitleBase + '（集計）</p></div>';
     }
 

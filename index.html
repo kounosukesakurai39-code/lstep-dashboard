@@ -90,8 +90,8 @@
   .incentive-table th { background: #eaf2f9; color: #163a5c; font-weight: 600; padding: 8px 10px; white-space: nowrap; }
   .incentive-input { width: 130px; border: none; background: transparent; padding: 8px 10px; font: inherit; color: #1f2b3d; text-align: center; }
   .incentive-computed { background: #f6f9fc; color: #55677e; font-weight: 600; text-align: center; min-width: 130px; white-space: nowrap; padding: 8px 10px; }
-  .inc-col-bonus, .inc-col-bonus input, .inc-col-other, .inc-col-other input { color: #1f8a4c !important; font-weight: 600; }
-  td.inc-col-bonus, th.inc-col-bonus, td.inc-col-other, th.inc-col-other { background: #eef8f1 !important; }
+  .inc-col-bonus, .inc-col-bonus input, .inc-col-other, .inc-col-other input, .inc-col-pay { color: #1f8a4c !important; font-weight: 600; }
+  td.inc-col-bonus, th.inc-col-bonus, td.inc-col-other, th.inc-col-other, td.inc-col-pay, th.inc-col-pay { background: #eef8f1 !important; }
   .incentive-table th { text-align: center; }
   .incentive-table td.num { text-align: center; }
   .incentive-table td.cat-label { text-align: center; }
@@ -2662,6 +2662,14 @@ function incentiveExTax(amount) {
   return Math.round(a / 1.1);
 }
 
+// ₩1000 = ¥100 換算。インセンティブ(円) = 金額(ウォン) × 歩合% ÷ 10
+var WON_TO_YEN = 0.1;
+function incentiveBonusYen(amount, rate) {
+  var a = Number(amount), rt = Number(rate);
+  if (!a || !rt) return 0;
+  return Math.round(a * rt / 100 * WON_TO_YEN);
+}
+
 function incentivePayTotal(r) {
   return (Number(r.bonus) || 0) + (Number(r.other) || 0);
 }
@@ -2705,7 +2713,7 @@ function updateIncentiveCell(id, field, value) {
   if (field === 'amount' && !row.bonus) {
     var rate = Number(DATA.incentiveRates[row.source]);
     var amount = Number(value);
-    if (rate && amount) row.bonus = String(Math.round(amount * rate / 100));
+    if (rate && amount) row.bonus = String(incentiveBonusYen(amount, rate));
   }
   save();
   renderManagersTab();
@@ -2720,7 +2728,7 @@ function updateIncentiveRate(value) {
     DATA.incentiveRows.forEach(function(r) {
       if (r.source !== currentIncentiveSource) return;
       var amount = Number(r.amount);
-      if (!r.bonus && amount) r.bonus = String(Math.round(amount * rate / 100));
+      if (!r.bonus && amount) r.bonus = String(incentiveBonusYen(amount, rate));
     });
   }
   save();
@@ -2742,7 +2750,7 @@ function syncIncentiveRowsFromRecords(source) {
     row.hospital = rec.surgeryVenue || rec.consultationVenue || '';
     row.amount = rec.revenue || '';
     var syncRate = Number(DATA.incentiveRates[source]);
-    if (syncRate && row.amount) row.bonus = String(Math.round(Number(row.amount) * syncRate / 100));
+    if (syncRate && row.amount) row.bonus = String(incentiveBonusYen(row.amount, syncRate));
     DATA.incentiveRows.push(row);
     added = true;
   });

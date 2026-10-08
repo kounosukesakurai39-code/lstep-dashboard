@@ -301,7 +301,7 @@
     <button class="tab" id="tabbtn-csv" onclick="showTab('csv')">📥 CSV取込</button>
     <button class="tab" id="tabbtn-snapshot" onclick="showTab('snapshot')">📅 月次集計</button>
     <button class="tab" id="tabbtn-ranking" onclick="showTab('ranking')">📊 ダッシュボード</button>
-    <button class="tab" id="tabbtn-managers" onclick="showTab('managers')">👤 管理者別</button>
+    <button class="tab" id="tabbtn-managers" onclick="showTab('managers')">👤 担当者別</button>
     <button class="tab" id="tabbtn-settings" onclick="showTab('settings')">⚙️ 設定</button>
   </div>
 </nav>
@@ -342,7 +342,7 @@
   <div class="kpi-row" id="kpiRow"></div>
   <div class="chart-row">
     <div class="chart-box full">
-      <h3>月別 新規登録推移</h3>
+      <h3>月別 LINE登録推移</h3>
       <canvas id="lineChart" height="90"></canvas>
     </div>
   </div>
@@ -1225,7 +1225,7 @@ function renderCharts() {
     type: 'line',
     data: {
       labels: months,
-      datasets: [{ label: '新規登録数', data: months.map(function(m) { return byMonth[m]; }), borderColor: '#60c0f0', backgroundColor: '#60c0f033', tension: 0.3, fill: true }]
+      datasets: [{ label: 'LINE登録数', data: months.map(function(m) { return byMonth[m]; }), borderColor: '#60c0f0', backgroundColor: '#60c0f033', tension: 0.3, fill: true }]
     },
     options: { plugins: { legend: { labels: { color: '#2a3a50' } } }, scales: { x: { ticks: { color: '#7088a0' }, grid: { color: '#eef0f4' } }, y: { ticks: { color: '#7088a0' }, grid: { color: '#eef0f4' }, beginAtZero: true } } }
   });

@@ -3022,7 +3022,7 @@ function renderManagersTab() {
       if (!monthGroups[ym]) monthGroups[ym] = newIncentiveAcc();
       accIncentiveRow(monthGroups[ym], r);
     });
-    var monthKeys = rows.length === 0 ? [] : fillContinuousMonths(monthGroups);
+    var monthKeys = fillContinuousMonths(monthGroups);
     var total = incentiveAccFromRows(rows);
 
     var summaryRows = monthKeys.map(function(k) {
@@ -3032,13 +3032,9 @@ function renderManagersTab() {
       return '<tr><td class="cat-label">' + esc(label) + '</td>' + incentiveSummaryCells(g) + '<td><button class="incentive-detail-btn" onclick="showIncentiveMonth(\'' + kArg + '\')">詳細</button></td></tr>';
     }).join('');
 
-    if (monthKeys.length === 0) {
-      mainHtml = perSourceTabs + '<p class="empty">まだ行がありません。「＋ 行追加」で入力を始められます。</p>';
-    } else {
-      mainHtml = perSourceTabs + '<div class="table-wrap"><table class="incentive-table"><thead><tr><th>手術月</th>' + INCENTIVE_SUMMARY_HEAD + '<th></th></tr></thead><tbody>' + summaryRows +
-        '<tr class="incentive-total-row"><td class="cat-label">合計</td>' + incentiveSummaryCells(total) + '<td></td></tr>' +
-        '</tbody></table></div>';
-    }
+    mainHtml = perSourceTabs + '<div class="table-wrap"><table class="incentive-table"><thead><tr><th>手術月</th>' + INCENTIVE_SUMMARY_HEAD + '<th></th></tr></thead><tbody>' + summaryRows +
+      '<tr class="incentive-total-row"><td class="cat-label">合計</td>' + incentiveSummaryCells(total) + '<td></td></tr>' +
+      '</tbody></table></div>';
   } else {
     var targetRows = filterIncentiveRows(currentIncentiveMonth === '__ALL__' ? rows : rows.filter(function(r) { return (extractYearMonth(r.surgeryDate) || '未定') === currentIncentiveMonth; }));
     var thead = '<tr>' + INCENTIVE_COLUMNS.map(function(c) { return '<th class="' + incentiveColClass(c.key) + '">' + esc(c.label) + '</th>'; }).join('') + '<th></th></tr>';

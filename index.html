@@ -223,12 +223,16 @@
   .rank-h2 { font-size: 1.15em; font-weight: 700; color: #163a5c; margin: 0; }
   .rank-period { display: flex; align-items: center; gap: 8px; font-size: 0.85em; color: #55677e; }
   .rank-select { border: 1px solid #cfe0f0 !important; border-radius: 8px; padding: 6px 10px !important; background: #fff !important; width: auto !important; color: #14548a; }
+  .chart-source-label { font-size: 0.85em; color: #55677e; display: inline-flex; align-items: center; gap: 8px; }
+  .chart-source-select { border: 1px solid #cfe0f0; border-radius: 8px; padding: 7px 12px; background: #fff; color: #14548a; font: inherit; font-weight: 600; max-width: 320px; }
   .rank-sub { font-size: 0.82em; color: #7c8ca0; margin: 6px 0 18px; }
   .rank-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
   .rank-card { border: 1px solid #eef1f5; border-radius: 14px; padding: 6px 0 10px; box-shadow: 0 1px 3px rgba(16,24,40,0.05); background: #fff; overflow: hidden; }
   .rank-card-title { font-size: 0.95em; font-weight: 700; padding: 14px 18px 12px; border-bottom: 1px solid #f0f2f6; margin-bottom: 4px; }
   .rank-blue-title { color: #14548a; }
   .rank-green-title { color: #1f8a4c; }
+  .rank-orange-title { color: #c47f17; }
+  .rank-purple-title { color: #7a3fb0; }
   .rank-row { display: flex; align-items: center; gap: 12px; padding: 9px 18px; }
   .rank-row + .rank-row { border-top: 1px solid #f6f8fb; }
   .rank-pos { width: 30px; text-align: center; font-size: 1.1em; flex-shrink: 0; }
@@ -239,6 +243,8 @@
   .rank-bar { height: 100%; border-radius: 4px; }
   .rank-bar.rank-blue { background: linear-gradient(90deg,#2f80c4,#14548a); }
   .rank-bar.rank-green { background: linear-gradient(90deg,#49b97a,#1f8a4c); }
+  .rank-bar.rank-orange { background: linear-gradient(90deg,#e0a94f,#c47f17); }
+  .rank-bar.rank-purple { background: linear-gradient(90deg,#a06fd0,#7a3fb0); }
   .rank-val { font-size: 1.05em; font-weight: 700; color: #163a5c; flex-shrink: 0; min-width: 48px; text-align: right; }
   .open-groups-tray { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
   .group-chip { display: inline-flex; align-items: center; gap: 6px; background: #eef4fa; border: 1px solid #cfe0f0; color: #14548a; font-size: 0.78em; font-weight: 600; padding: 4px 6px 4px 10px; border-radius: 999px; cursor: pointer; transition: background .15s; }
@@ -1090,12 +1096,12 @@ function renderChartSourceTabs() {
   }
   var el = document.getElementById('chartSourceTabs');
   var srcList = DATA.sources.filter(function(s) { return !chartFilterBusiness || chartSourceBusiness(s) === chartFilterBusiness; });
+  if (chartFilterSource && srcList.indexOf(chartFilterSource) < 0) chartFilterSource = '';
   var options = [''].concat(srcList);
-  el.innerHTML = options.map(function(s) {
-    var active = s === chartFilterSource ? ' active' : '';
-    var arg = s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    return '<button class="tab' + active + '" onclick="setChartFilterSource(\'' + arg + '\')">' + esc(s || '全体') + '</button>';
-  }).join('');
+  el.innerHTML = '<label class="chart-source-label">インフルエンサー <select class="chart-source-select" onchange="setChartFilterSource(this.value)">' +
+    options.map(function(s) {
+      return '<option value="' + esc(s) + '"' + (s === chartFilterSource ? ' selected' : '') + '>' + esc(s || '全員') + '</option>';
+    }).join('') + '</select></label>';
 }
 
 function setChartFilterSource(source) {
@@ -1626,21 +1632,25 @@ function setRankingPeriod(p) {
 
 function renderRankingTab() {
   var area = document.getElementById('rankingArea');
+  var RANK_METRICS = ['全体', 'カウンセ申込済', '成約', '渡韓済'];
   var snsRows = DATA.snapshots.filter(function(s) {
-    return s.group === 'SNS' && (s.metric === '全体' || s.metric === 'カウンセ申込済');
+    return s.group === 'SNS' && RANK_METRICS.indexOf(s.metric) >= 0;
   });
   if (snsRows.length === 0) { area.innerHTML = '<p class="empty">SNSのデータがありません。</p>'; return; }
 
   var allDates = [];
   snsRows.forEach(function(s) { if (allDates.indexOf(s.date) < 0) allDates.push(s.date); });
   allDates.sort();
+  var rankYears = [];
+  allDates.forEach(function(d) { var y = d.slice(0, 4); if (rankYears.indexOf(y) < 0) rankYears.push(y); });
+  rankYears.sort();
   var latestMonth = allDates[allDates.length - 1];
   if (currentRankingPeriod === null) currentRankingPeriod = latestMonth;
   var isCumulative = currentRankingPeriod === '__CUMULATIVE__';
+  var rankYear = (currentRankingPeriod && currentRankingPeriod.indexOf('__YEAR__') === 0) ? currentRankingPeriod.slice(8) : null;
 
-  // value lookup: person -> category -> metric -> {date: value}
+  // account(category) -> date -> value、期間に応じて貢献度を算出
   function computeRanking(metric) {
-    // account(category) -> date -> value
     var catData = {};
     var catLabel = {};
     snsRows.forEach(function(s) {
@@ -1649,10 +1659,17 @@ function renderRankingTab() {
       if (!catData[key]) { catData[key] = {}; catLabel[key] = rankingAccountLabel(s.category); }
       catData[key][s.date] = (catData[key][s.date] || 0) + s.value;
     });
+    function latestLE(byDate, cutoff) {
+      var best = null;
+      Object.keys(byDate).forEach(function(d) { if (d <= cutoff && (best === null || d > best)) best = d; });
+      return best === null ? 0 : byDate[best];
+    }
     var list = Object.keys(catData).map(function(key) {
       var byDate = catData[key];
       var contribution = 0;
-      if (isCumulative) {
+      if (rankYear) {
+        contribution = latestLE(byDate, rankYear + '-12') - latestLE(byDate, (parseInt(rankYear, 10) - 1) + '-12');
+      } else if (isCumulative) {
         var catDates = Object.keys(byDate).sort();
         if (catDates.length) contribution = byDate[catDates[catDates.length - 1]];
       } else {
@@ -1674,13 +1691,19 @@ function renderRankingTab() {
 
   var regRanking = computeRanking('全体');
   var counselRanking = computeRanking('カウンセ申込済');
+  var closeRanking = computeRanking('成約');
+  var travelRanking = computeRanking('渡韓済');
 
-  var periodOptions = allDates.slice().reverse().map(function(d) {
-    return '<option value="' + d + '"' + (d === currentRankingPeriod ? ' selected' : '') + '>' + esc(formatMonth(d)) + (isCumulative ? '' : '') + '</option>';
+  var periodOptions = rankYears.slice().reverse().map(function(y) {
+    var v = '__YEAR__' + y;
+    return '<option value="' + v + '"' + (currentRankingPeriod === v ? ' selected' : '') + '>' + y + '年（単年）</option>';
+  }).join('');
+  periodOptions += allDates.slice().reverse().map(function(d) {
+    return '<option value="' + d + '"' + (d === currentRankingPeriod ? ' selected' : '') + '>' + esc(formatMonth(d)) + '</option>';
   }).join('');
   periodOptions += '<option value="__CUMULATIVE__"' + (isCumulative ? ' selected' : '') + '>累計（最新時点）</option>';
 
-  var periodLabel = isCumulative ? '累計' : formatMonth(currentRankingPeriod) + 'の増加数';
+  var periodLabel = rankYear ? (rankYear + '年の増加数') : (isCumulative ? '累計' : formatMonth(currentRankingPeriod) + 'の増加数');
 
   function rankingCardHtml(title, list, accentClass) {
     var maxVal = list.length ? Math.max.apply(null, list.map(function(r) { return r.value; })) : 0;
@@ -1770,6 +1793,8 @@ function renderRankingTab() {
     '<div class="rank-grid">' +
     rankingCardHtml('登録数ランキング', regRanking, 'rank-blue') +
     rankingCardHtml('相談会予約数ランキング', counselRanking, 'rank-green') +
+    rankingCardHtml('成約数ランキング', closeRanking, 'rank-orange') +
+    rankingCardHtml('渡韓数ランキング', travelRanking, 'rank-purple') +
     '</div>';
 
   area.innerHTML = html;

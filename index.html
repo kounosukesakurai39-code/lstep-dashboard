@@ -2356,12 +2356,10 @@ function renderSnapshotTable() {
         var periodKeys = [m + '-P1', m + '-P2', m + '-P3'];
         var periodCells = periodKeys.map(function(d) {
           var entry = g.byDate[d];
-          if (!entry || entry.value === 0) {
+          if (!entry) {
             if (g.isAgg || g.isPlatform || g.isCompare || g.isComputedGrowth) return '<td class="num">-</td>';
-            var onclickAttr = (entry && entry.id !== undefined)
-              ? 'startEditCell(this,' + entry.id + ',null)'
-              : 'startEditCell(this,null,\'' + [currentSnapshotBusiness, g.category, g.metric, d].join('｜').replace(/'/g, "\\'") + '\')';
-            return '<td class="num"><span class="editable-cell" onclick="' + onclickAttr + '" title="クリックで入力">-</span></td>';
+            var createKey = [currentSnapshotBusiness, g.category, g.metric, d].join('｜').replace(/'/g, "\\'");
+            return '<td class="num"><span class="editable-cell" onclick="startEditCell(this,null,\'' + createKey + '\')" title="クリックで入力">-</span></td>';
           }
           var valueHtml = entry.id !== undefined
             ? '<span class="editable-cell" onclick="startEditCell(this,' + entry.id + ',null)" title="クリックで編集">' + entry.value.toLocaleString('ja-JP') + '</span>'
@@ -2370,12 +2368,12 @@ function renderSnapshotTable() {
         }).join('');
         var totalHtml = '-';
         if (g.metric !== 'フォロワー総数') {
-          var sum = null, anyNonZero = false;
+          var sum = null;
           periodKeys.forEach(function(d) {
             var entry = g.byDate[d];
-            if (entry) { sum = (sum || 0) + entry.value; if (entry.value !== 0) anyNonZero = true; }
+            if (entry) sum = (sum || 0) + entry.value;
           });
-          totalHtml = (sum === null || !anyNonZero) ? '-' : sum.toLocaleString('ja-JP');
+          totalHtml = sum === null ? '-' : sum.toLocaleString('ja-JP');
         }
         return periodCells + '<td class="num total-col">' + totalHtml + '</td>';
       }).join('');

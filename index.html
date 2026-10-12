@@ -2032,6 +2032,19 @@ function renderSnapshotTable() {
       var m = d.slice(0, 7);
       if (monthGroups.indexOf(m) < 0) monthGroups.push(m);
     });
+    // 現在の暦月まで必ず列を出す（データが無くても空欄で入力できるように）
+    var pad2 = function(n) { return n < 10 ? '0' + n : '' + n; };
+    var nowKey = new Date().getFullYear() + '-' + pad2(new Date().getMonth() + 1);
+    if (monthGroups.length && monthGroups.indexOf(nowKey) < 0) {
+      var lastKey = monthGroups[monthGroups.length - 1];
+      var y = parseInt(lastKey.slice(0, 4), 10), mo = parseInt(lastKey.slice(5, 7), 10);
+      var ey = parseInt(nowKey.slice(0, 4), 10), em = parseInt(nowKey.slice(5, 7), 10);
+      while (y < ey || (y === ey && mo < em)) {
+        mo++; if (mo > 12) { mo = 1; y++; }
+        var k = y + '-' + pad2(mo);
+        if (monthGroups.indexOf(k) < 0) monthGroups.push(k);
+      }
+    }
   }
   var dataColCount = isPeriodMode ? monthGroups.length * 4 : (isSartoMode ? dates.length * 2 : dates.length);
   var dateIndex = {};

@@ -2068,11 +2068,9 @@ function renderSnapshotTable() {
 
   groupOrder.forEach(function(g) {
     var isSingleMemberGroup = groupMembersMap[g].length === 1;
-    if (!isSingleMemberGroup) {
-      var headerKey = '__HEADER__' + g;
-      groups[headerKey] = { isHeader: true, group: g, memberCount: groupMembersMap[g].length };
-      order.push(headerKey);
-    }
+    var headerKey = '__HEADER__' + g;
+    groups[headerKey] = { isHeader: true, group: g, memberCount: groupMembersMap[g].length };
+    order.push(headerKey);
 
     if (expandedGroups[g] && groupMembersMap[g].length > 1) {
       var groupRows = rows.filter(function(s) { return categoryGroup(s) === g; });
@@ -2126,11 +2124,11 @@ function renderSnapshotTable() {
           });
         }
       });
-    } else if ((isSingleMemberGroup || expandedGroups[g]) && !isPlatformBreakdownGroup && (groupMembersMap[g].length === 1 || expandedAggDetails[g])) {
+    } else if (expandedGroups[g] && !isPlatformBreakdownGroup && (groupMembersMap[g].length === 1 || expandedAggDetails[g])) {
       groupMembersMap[g].forEach(function(cat) {
         metricsByCategory[cat].forEach(function(metric) {
           var key = cat + '｜' + metric;
-          groups[key] = { category: cat, metric: metric, byDate: {}, singleGroup: isSingleMemberGroup ? g : null };
+          groups[key] = { category: cat, metric: metric, byDate: {}, singleGroup: null, singleMember: isSingleMemberGroup };
           order.push(key);
 
           if (isSartoMode) {
@@ -2333,6 +2331,7 @@ function renderSnapshotTable() {
     }
     var isGroupStart = g.category !== lastCategory;
     var catLabel = isGroupStart ? esc(g.category) : '';
+    if (g.singleMember) catLabel = '';
     if (isGroupStart && g.singleGroup && !isPeriodMode && !isSartoMode) {
       var sgArg = g.singleGroup.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       catLabel += ' <span class="compare-toggle' + (expandedCompareGroups[g.singleGroup] ? ' active' : '') + '" onclick="event.stopPropagation(); toggleCompareGroup(\'' + sgArg + '\')">⇄ 他事業と比較</span>';

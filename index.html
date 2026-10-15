@@ -2672,7 +2672,8 @@ var INCENTIVE_COLUMNS = [
   { key: 'amountExTax', label: '手術費用（税抜）', computed: true },
   { key: 'bonus', label: 'インセンティブ' },
   { key: 'other', label: 'その他' },
-  { key: 'payTotal', label: '支払い合計', computed: true }
+  { key: 'payTotal', label: '支払い合計', computed: true },
+  { key: 'note', label: '備考' }
 ];
 
 function incentiveComputedValue(key, r) {
@@ -2826,6 +2827,7 @@ function syncIncentiveRowsFromRecords(source) {
     row.region = rec.location || '';
     row.hospital = rec.surgeryVenue || rec.consultationVenue || '';
     row.amount = rec.revenue || '';
+    row.note = rec.note || '';
     var syncRate = Number(DATA.incentiveRates[source]);
     if (syncRate && row.amount) row.bonus = String(incentiveBonusYen(row.amount, syncRate));
     DATA.incentiveRows.push(row);

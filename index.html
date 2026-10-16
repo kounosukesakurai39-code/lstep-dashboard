@@ -14,14 +14,18 @@
   h1 { text-align: center; font-size: 1.15em; font-weight: 700; margin-bottom: 6px; color: #163a5c; line-height: 1.3; }
   .subtitle { text-align: center; color: #8494a8; margin-bottom: 20px; font-size: 0.75em; }
 
-  .app-layout { display: flex; align-items: flex-start; min-height: 100vh; }
-  .main-sidebar { width: 190px; min-width: 190px; flex-shrink: 0; background: #fff; border-right: 1px solid #e5eaf0; padding: 20px 14px; position: sticky; top: 0; height: 100vh; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; }
-  .main-sidebar h1, .main-sidebar .subtitle { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .app-layout { display: flex; flex-direction: column; align-items: stretch; min-height: 100vh; }
+  .main-sidebar { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; background: #fff; border-bottom: 1px solid #e5eaf0; padding: 0 24px; position: sticky; top: 0; z-index: 50; box-sizing: border-box; }
+  .main-sidebar h1 { text-align: left; margin: 0; font-size: 1.05em; white-space: nowrap; }
+  .main-sidebar h1 br, .main-sidebar .subtitle { display: none; }
   .app-main { flex: 1; min-width: 0; padding: 20px; }
 
   .tab-row { display: flex; gap: 8px; max-width: 1000px; margin: 0 auto 20px; flex-wrap: wrap; }
-  .main-sidebar .tab-row { flex-direction: column; max-width: none; margin: 0; gap: 6px; }
-  .main-sidebar .tab, .main-sidebar .snap-nav-sub, .main-sidebar .snap-nav-item { text-align: left; border-radius: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; box-sizing: border-box; }
+  .main-sidebar .tab-row { flex-direction: row; flex: 1; max-width: none; margin: 0; gap: 2px; flex-wrap: wrap; }
+  .main-sidebar .tab { border: none; border-radius: 0; background: transparent; color: #6b7c93; padding: 17px 18px 14px; border-bottom: 3px solid transparent; font-weight: 500; font-size: 0.9em; white-space: nowrap; text-align: center; transition: color .15s ease, border-color .15s ease; }
+  .main-sidebar .tab:hover { color: #163a5c; }
+  .main-sidebar .tab.active { background: transparent; color: #14548a; border-bottom-color: #14548a; }
+  @media (max-width: 700px) { .main-sidebar { padding: 0 10px; gap: 4px; } .main-sidebar h1 { display: none; } .main-sidebar .tab { padding: 12px 10px 10px; font-size: 0.82em; } }
   .tab { padding: 8px 20px; border-radius: 20px; border: 1px solid #d5dee8; background: #fff; color: #7088a0; cursor: pointer; font-size: 0.85em; }
   .tab.active { background: #1a6090; color: #fff; border-color: #1a6090; }
 
@@ -172,7 +176,7 @@
   .snap-nav-sub-group .count { font-size: 0.85em; color: #b0bdcc; }
   .snap-nav-sub-group.active { background: #eaf2f9; color: #14548a; box-shadow: inset 3px 0 0 #14548a; }
   .snap-main { flex: 1; min-width: 0; }
-  .snap-wrap { overflow: auto; max-height: calc(100vh - 40px); border: 1px solid #eef1f5; border-radius: 12px; box-shadow: 0 1px 2px rgba(16,24,40,0.04), 0 1px 3px rgba(16,24,40,0.05); }
+  .snap-wrap { overflow: auto; max-height: calc(100vh - 160px); border: 1px solid #eef1f5; border-radius: 12px; box-shadow: 0 1px 2px rgba(16,24,40,0.04), 0 1px 3px rgba(16,24,40,0.05); }
   .snap-wrap table { border: none; border-radius: 0; border-collapse: separate; border-spacing: 0; overflow: visible; font-size: 0.82em; table-layout: fixed; }
   .snap-table th, .snap-table td { border-right: none; border-bottom: 1px solid #f0f2f6; }
   .snap-table thead th { position: sticky; top: 0; z-index: 2; background: #fafbfd; color: #55677e; font-weight: 600; font-size: 0.76em; letter-spacing: 0.03em; border-bottom: 1px solid #e5eaf0; }

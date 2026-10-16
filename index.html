@@ -235,6 +235,22 @@
   .nav-select:focus { outline: 2px solid #14548a; outline-offset: -2px; }
   .chart-source-select { border: 1px solid #cfe0f0; border-radius: 8px; padding: 7px 12px; background: #fff; color: #14548a; font: inherit; font-weight: 600; max-width: 320px; }
   .rank-sub { font-size: 0.82em; color: #7c8ca0; margin: 6px 0 18px; }
+  .trend-box { margin-top: 28px; }
+  .trend-controls { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; margin: 4px 0 12px; }
+  .trend-seg { display: inline-flex; border: 1px solid #cfe0f0; border-radius: 9px; overflow: hidden; background: #fff; }
+  .trend-seg button { border: none; background: transparent; padding: 7px 14px; font: inherit; font-size: 0.85em; color: #55677e; cursor: pointer; }
+  .trend-seg button + button { border-left: 1px solid #cfe0f0; }
+  .trend-seg button.active { background: #14548a; color: #fff; }
+  .trend-wrap { overflow-x: auto; border: 1px solid #e5eaf0; border-radius: 12px; background: #fff; }
+  .trend-table { border-collapse: collapse; width: 100%; font-size: 0.84em; }
+  .trend-table th, .trend-table td { padding: 9px 10px; text-align: center; border-bottom: 1px solid #eef1f5; white-space: nowrap; }
+  .trend-table thead th { background: #fafbfd; color: #55677e; font-weight: 600; font-size: 0.92em; }
+  .trend-table td.t-name { text-align: left; font-weight: 600; color: #163a5c; position: sticky; left: 0; background: #fff; }
+  .trend-table tr.t-all td { background: #f4f8fc; font-weight: 700; }
+  .trend-table tr.t-all td.t-name { background: #f4f8fc; }
+  .trend-table td.t-cell small { display: block; font-size: 0.78em; color: #5b6c82; font-weight: 400; }
+  .trend-table td.t-top { text-align: left; color: #14548a; font-weight: 600; }
+  .trend-table td.t-cov { color: #7c8ca0; font-size: 0.92em; }
   .rank-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
   .rank-card { border: 1px solid #eef1f5; border-radius: 14px; padding: 6px 0 10px; box-shadow: 0 1px 3px rgba(16,24,40,0.05); background: #fff; overflow: hidden; }
   .rank-card-title { font-size: 0.95em; font-weight: 700; padding: 14px 18px 12px; border-bottom: 1px solid #f0f2f6; margin-bottom: 4px; }
@@ -1623,6 +1639,84 @@ function setRankingPeriod(p) {
   renderRankingTab();
 }
 
+var trendDim = 'venue';
+var trendScope = 'all';
+
+function setTrendDim(v) { trendDim = v; renderInfluencerTrend(); }
+function setTrendScope(v) { trendScope = v; renderInfluencerTrend(); }
+
+function trendTokens(r) {
+  if (trendDim === 'venue') return r.consultationVenue ? [r.consultationVenue] : [];
+  return (r.desiredArea || '').split(/[、,，]+/).map(function(x) { return x.trim(); }).filter(Boolean);
+}
+
+function renderInfluencerTrend() {
+  var box = document.getElementById('influencerTrendBox');
+  if (!box) return;
+  var recs = DATA.records.filter(function(r) {
+    if (r.status === 'ブロック') return false;
+    return trendScope === 'all' || isClosedStatus(r.status);
+  });
+  var perSource = {}, colTotals = {}, all = { total: recs.length, filled: 0, counts: {} };
+  recs.forEach(function(r) {
+    var src = r.source || '未設定';
+    if (!perSource[src]) perSource[src] = { name: src, total: 0, filled: 0, counts: {} };
+    var row = perSource[src];
+    row.total++;
+    var toks = trendTokens(r);
+    if (toks.length) { row.filled++; all.filled++; }
+    toks.forEach(function(t) {
+      row.counts[t] = (row.counts[t] || 0) + 1;
+      all.counts[t] = (all.counts[t] || 0) + 1;
+      colTotals[t] = (colTotals[t] || 0) + 1;
+    });
+  });
+  var cols = Object.keys(colTotals).sort(function(a, b) { return colTotals[b] - colTotals[a]; });
+  var rows = Object.keys(perSource).map(function(k) { return perSource[k]; })
+    .filter(function(r) { return r.filled > 0; })
+    .sort(function(a, b) { return b.filled - a.filled; });
+
+  var dimLabel = trendDim === 'venue' ? '相談会予約先' : '希望部位';
+  var controls = '<div class="trend-controls">' +
+    '<div class="trend-seg"><button class="' + (trendDim === 'venue' ? 'active' : '') + '" onclick="setTrendDim(\'venue\')">病院（相談会予約先）</button>' +
+    '<button class="' + (trendDim === 'area' ? 'active' : '') + '" onclick="setTrendDim(\'area\')">希望部位</button></div>' +
+    '<div class="trend-seg"><button class="' + (trendScope === 'all' ? 'active' : '') + '" onclick="setTrendScope(\'all\')">登録者すべて</button>' +
+    '<button class="' + (trendScope === 'closed' ? 'active' : '') + '" onclick="setTrendScope(\'closed\')">成約以上のみ</button></div>' +
+    '</div>';
+
+  if (!rows.length || !cols.length) {
+    box.innerHTML = controls + '<p class="empty">この条件で' + dimLabel + 'が入力されている登録者がいません。</p>';
+    return;
+  }
+
+  function topText(row) {
+    var best = null;
+    Object.keys(row.counts).forEach(function(k) { if (best === null || row.counts[k] > row.counts[best]) best = k; });
+    return best === null ? '-' : esc(best) + '（' + Math.round(row.counts[best] / row.filled * 100) + '%）';
+  }
+  function rowHtml(row, isAll) {
+    var cells = cols.map(function(c) {
+      var n = row.counts[c] || 0;
+      if (!n) return '<td class="t-cell" style="color:#c0c9d4">-</td>';
+      var share = n / row.filled;
+      var bg = 'rgba(20,84,138,' + (0.06 + 0.5 * share).toFixed(2) + ')';
+      var fg = share > 0.55 ? '#fff' : '#163a5c';
+      var sub = share > 0.55 ? 'color:#e6eef7' : '';
+      return '<td class="t-cell" style="background:' + bg + ';color:' + fg + '"><b>' + n + '</b><small style="' + sub + '">' + Math.round(share * 100) + '%</small></td>';
+    }).join('');
+    return '<tr class="' + (isAll ? 't-all' : '') + '"><td class="t-name">' + (isAll ? '全体' : esc(row.name)) + '</td>' +
+      '<td class="t-top">' + topText(row) + '</td>' +
+      '<td class="t-cov">' + row.filled + ' / ' + row.total + '</td>' + cells + '</tr>';
+  }
+  var head = '<tr><th style="text-align:left">インフルエンサー</th><th style="text-align:left">いちばん多い</th><th>入力あり / 登録</th>' +
+    cols.map(function(c) { return '<th>' + esc(c) + '</th>'; }).join('') + '</tr>';
+  box.innerHTML = controls +
+    '<div class="trend-wrap"><table class="trend-table"><thead>' + head + '</thead><tbody>' +
+    rowHtml(all, true) + rows.map(function(r) { return rowHtml(r, false); }).join('') +
+    '</tbody></table></div>' +
+    '<p class="rank-sub" style="margin-top:8px">％は、その人の' + dimLabel + 'が入力されている登録者のうちの割合です。複数の部位を選んだ人は、それぞれに数えます。入力がない登録者は含みません。</p>';
+}
+
 function renderRankingTab() {
   var area = document.getElementById('rankingArea');
   var RANK_METRICS = ['全体', 'カウンセ申込済', '成約', '渡韓済'];
@@ -1788,10 +1882,15 @@ function renderRankingTab() {
     rankingCardHtml('相談会予約数ランキング', counselRanking, 'rank-green') +
     rankingCardHtml('成約数ランキング', closeRanking, 'rank-orange') +
     rankingCardHtml('渡韓数ランキング', travelRanking, 'rank-purple') +
-    '</div>';
+    '</div>' +
+    '<div class="trend-box">' +
+    '<div class="rank-header"><h2 class="rank-h2" style="font-size:1.05em">🏥 インフルエンサー別の傾向</h2></div>' +
+    '<p class="rank-sub">どのインフルエンサー経由の人が、どの病院・どの部位に多いかを登録者データから集計します。</p>' +
+    '<div id="influencerTrendBox"></div></div>';
 
   area.innerHTML = html;
   renderIncreaseBarChart();
+  renderInfluencerTrend();
 }
 
 function platformOf(category) {

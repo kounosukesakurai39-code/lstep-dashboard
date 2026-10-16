@@ -224,6 +224,11 @@
   .rank-period { display: flex; align-items: center; gap: 8px; font-size: 0.85em; color: #55677e; }
   .rank-select { border: 1px solid #cfe0f0 !important; border-radius: 8px; padding: 6px 10px !important; background: #fff !important; width: auto !important; color: #14548a; }
   .chart-source-label { font-size: 0.85em; color: #55677e; display: inline-flex; align-items: center; gap: 8px; }
+  .snap-layout-col { flex-direction: column; align-items: stretch; gap: 0; }
+  .nav-select-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .nav-select-bar .nav-select-label { color: #55677e; font-size: 0.85em; font-weight: 600; }
+  .nav-select { border: 1px solid #cfe0f0; border-radius: 10px; padding: 10px 14px; background: #fff; color: #14548a; font: inherit; font-weight: 600; min-width: 260px; max-width: 100%; cursor: pointer; }
+  .nav-select:focus { outline: 2px solid #14548a; outline-offset: -2px; }
   .chart-source-select { border: 1px solid #cfe0f0; border-radius: 8px; padding: 7px 12px; background: #fff; color: #14548a; font: inherit; font-weight: 600; max-width: 320px; }
   .rank-sub { font-size: 0.82em; color: #7c8ca0; margin: 6px 0 18px; }
   .rank-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
@@ -330,6 +335,7 @@
 
 <!-- インフルエンサー個別 -->
 <div class="panel" id="panel-influencer">
+  <div class="nav-select-bar" id="influencerSelectArea"></div>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px">
     <h2 id="influencerTitle" style="color:#1a6090;font-size:1.1em"></h2>
     <button class="btn green" onclick="openModal(null)">＋ 新規追加</button>
@@ -671,16 +677,32 @@ var SOURCE_PERSON_MAP = {
   '藤原 youtube': '藤原',
   '深町 X': '深町'
 };
-var influencerSubGroupOpen = {};
-
 function influencerSourcesOf(name) {
   return INFLUENCER_GROUPS[name] ? INFLUENCER_GROUPS[name] : [name];
 }
 
-function toggleInfluencerSubGroup(name) {
-  var alreadySelected = currentInfluencer === name;
-  influencerSubGroupOpen[name] = alreadySelected ? !influencerSubGroupOpen[name] : true;
-  showInfluencerTab(name);
+function buildInfluencerSelectHtml() {
+  var memberToGroup = {};
+  Object.keys(INFLUENCER_GROUPS).forEach(function(g) {
+    INFLUENCER_GROUPS[g].forEach(function(m) { memberToGroup[m] = g; });
+  });
+  var renderedGroups = {};
+  var opts = [];
+  DATA.sources.forEach(function(name) {
+    var group = memberToGroup[name];
+    if (group) {
+      if (renderedGroups[group]) return;
+      renderedGroups[group] = true;
+      var inner = '<option value="' + esc(group) + '"' + (currentInfluencer === group ? ' selected' : '') + '>' + esc(group) + ' 全体</option>';
+      INFLUENCER_GROUPS[group].forEach(function(sub) {
+        inner += '<option value="' + esc(sub) + '"' + (currentInfluencer === sub ? ' selected' : '') + '>' + esc(sub) + '</option>';
+      });
+      opts.push('<optgroup label="' + esc(group) + '">' + inner + '</optgroup>');
+    } else {
+      opts.push('<option value="' + esc(name) + '"' + (currentInfluencer === name ? ' selected' : '') + '>' + esc(name) + '</option>');
+    }
+  });
+  return '<span class="nav-select-label">インフルエンサー</span><select class="nav-select" onchange="showInfluencerTab(this.value)">' + opts.join('') + '</select>';
 }
 
 function showTab(id) {
@@ -711,47 +733,6 @@ function toggleInfluencerGroup() {
 
 function renderInfluencerTabs() {
   document.querySelectorAll('.tab-influencer').forEach(function(el) { el.remove(); });
-  if (!influencerGroupOpen) return;
-  var anchor = document.getElementById('tabbtn-influencerGroup');
-  var memberToGroup = {};
-  Object.keys(INFLUENCER_GROUPS).forEach(function(g) {
-    INFLUENCER_GROUPS[g].forEach(function(m) {
-      memberToGroup[m] = g;
-      if (currentInfluencer === m) influencerSubGroupOpen[g] = true;
-    });
-  });
-  var renderedGroups = {};
-  DATA.sources.forEach(function(name) {
-    var group = memberToGroup[name];
-    if (group) {
-      if (renderedGroups[group]) return;
-      renderedGroups[group] = true;
-      var isOpen = !!influencerSubGroupOpen[group];
-      var head = document.createElement('button');
-      head.className = 'snap-nav-sub-group tab-influencer' + (currentInfluencer === group ? ' active' : '');
-      head.innerHTML = '<span>' + (isOpen ? '▼' : '▶') + '</span><span>' + esc(group) + '</span><span class="count">(' + INFLUENCER_GROUPS[group].length + ')</span>';
-      head.onclick = function() { toggleInfluencerSubGroup(group); };
-      anchor.insertAdjacentElement('afterend', head);
-      anchor = head;
-      if (isOpen) {
-        INFLUENCER_GROUPS[group].forEach(function(sub) {
-          var subBtn = document.createElement('button');
-          subBtn.className = 'snap-nav-sub2 tab-influencer' + (currentInfluencer === sub ? ' active' : '');
-          subBtn.textContent = sub;
-          subBtn.onclick = function() { showInfluencerTab(sub); };
-          anchor.insertAdjacentElement('afterend', subBtn);
-          anchor = subBtn;
-        });
-      }
-    } else {
-      var btn = document.createElement('button');
-      btn.className = 'snap-nav-sub tab-influencer' + (currentInfluencer === name ? ' active' : '');
-      btn.textContent = name;
-      btn.onclick = function() { showInfluencerTab(name); };
-      anchor.insertAdjacentElement('afterend', btn);
-      anchor = btn;
-    }
-  });
 }
 
 function showInfluencerTab(name) {
@@ -767,6 +748,7 @@ function showInfluencerTab(name) {
 
 function renderInfluencerPanel() {
   var name = currentInfluencer;
+  document.getElementById('influencerSelectArea').innerHTML = buildInfluencerSelectHtml();
   document.getElementById('influencerTitle').textContent = '👤 ' + name + (INFLUENCER_GROUPS[name] ? ' 全体' : '') + ' の登録者';
 
   var srcNames = influencerSourcesOf(name);
@@ -2598,6 +2580,23 @@ function toggleIncentiveSubGroup(name) {
   renderManagersTab();
 }
 
+function showIncentiveGroup(name) {
+  currentIncentiveGroup = name;
+  currentIncentiveSource = null;
+  currentIncentiveMonth = null;
+  currentIncentivePlatform = null;
+  currentIncentiveGroupMonth = null;
+  currentIncentiveMonthPlatformBreakdown = null;
+  renderManagersTab();
+}
+
+function onIncentiveSelect(v) {
+  if (v === '__ALL__') showIncentiveAll();
+  else if (v.indexOf('S:') === 0) showIncentiveSource(v.slice(2));
+  else if (v.indexOf('P:') === 0) showIncentivePersonGroup(v.slice(2));
+  else if (v.indexOf('G:') === 0) showIncentiveGroup(v.slice(2));
+}
+
 function showIncentiveAll() {
   currentIncentiveGroup = '__ALL__';
   currentIncentiveSource = null;
@@ -2904,7 +2903,7 @@ function renderManagersTab() {
       return '<tr><td class="cat-label">' + esc(name) + '</td><td class="cat-label">' + esc(platform) + '</td><td class="num"><input type="number" class="incentive-rate-input" value="' + rate + '" placeholder="0" onchange="updateIncentiveRateFor(\'' + arg + '\',this.value)">%</td></tr>';
     }).join('');
     var rateMainHtml = '<div class="table-wrap"><table class="incentive-table incentive-rate-table"><thead><tr><th>名前</th><th>SNS</th><th>パーセンテージ</th></tr></thead><tbody>' + rateRows + '</tbody></table></div>';
-    area.innerHTML = '<div class="snap-layout"><div class="snap-sidebar">' + navModeTabsHtml + '</div><div class="snap-main">' + rateMainHtml + '</div></div>';
+    area.innerHTML = '<div class="snap-layout snap-layout-col">' + navModeTabsHtml + '<div class="snap-main">' + rateMainHtml + '</div></div>';
     return;
   }
 
@@ -2918,7 +2917,12 @@ function renderManagersTab() {
 
   var renderedGroups = {};
   var isAllSel = currentIncentiveGroup === '__ALL__' && !currentIncentiveSource;
-  var sidebarItems = ['<button class="snap-nav-item' + (isAllSel ? ' active' : '') + '" onclick="showIncentiveAll()">全体</button>'];
+  function incOpt(value, label, selected) {
+    return '<option value="' + esc(value) + '"' + (selected ? ' selected' : '') + '>' + esc(label) + '</option>';
+  }
+  var selectOpts = [];
+  if (!currentIncentiveGroup && !currentIncentiveSource) selectOpts.push('<option value="" selected disabled>選んでください</option>');
+  selectOpts.push(incOpt('__ALL__', '全体', isAllSel));
 
   if (incentiveNavMode === 'person') {
     var personNames = [];
@@ -2928,19 +2932,11 @@ function renderManagersTab() {
     });
     personNames.sort(function(a, b) { return a.localeCompare(b, 'ja'); });
     personNames.forEach(function(p) {
-      var pArg = p.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       var personSources = Object.keys(SOURCE_PERSON_MAP).filter(function(s) { return SOURCE_PERSON_MAP[s] === p; });
-      var openKey = 'PERSON::' + p;
-      var isOpen = !!incentiveSubGroupOpen[openKey];
-      var isGroupSel = currentIncentiveGroup === openKey && !currentIncentiveSource;
-      sidebarItems.push('<button class="snap-nav-sub-group' + (isGroupSel ? ' active' : '') + '" onclick="togglePersonGroupOpen(\'' + pArg + '\')"><span>' + (isOpen ? '▼' : '▶') + '</span><span>' + esc(p) + '</span><span class="count">(' + personSources.length + ')</span></button>');
-      if (isOpen) {
-        personSources.forEach(function(sub) {
-          var subArg = sub.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-          var isSel = currentIncentiveSource === sub;
-          sidebarItems.push('<button class="snap-nav-sub2' + (isSel ? ' active' : '') + '" onclick="showIncentiveSource(\'' + subArg + '\')">' + esc(sub) + '</button>');
-        });
-      }
+      var isGroupSel = currentIncentiveGroup === 'PERSON::' + p && !currentIncentiveSource;
+      var inner = incOpt('P:' + p, p + ' 全体', isGroupSel);
+      personSources.forEach(function(sub) { inner += incOpt('S:' + sub, sub, currentIncentiveSource === sub); });
+      selectOpts.push('<optgroup label="' + esc(p) + '">' + inner + '</optgroup>');
     });
   } else {
     DATA.sources.forEach(function(name) {
@@ -2948,26 +2944,18 @@ function renderManagersTab() {
       if (group) {
         if (renderedGroups[group]) return;
         renderedGroups[group] = true;
-        var isOpen = !!incentiveSubGroupOpen[group];
         var isGroupSel = currentIncentiveGroup === group && !currentIncentiveSource;
-        var gArg = group.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        sidebarItems.push('<button class="snap-nav-sub-group' + (isGroupSel ? ' active' : '') + '" onclick="toggleIncentiveSubGroup(\'' + gArg + '\')"><span>' + (isOpen ? '▼' : '▶') + '</span><span>' + esc(group) + '</span><span class="count">(' + INFLUENCER_GROUPS[group].length + ')</span></button>');
-        if (isOpen) {
-          INFLUENCER_GROUPS[group].forEach(function(sub) {
-            var subArg = sub.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-            var isSel = currentIncentiveSource === sub;
-            sidebarItems.push('<button class="snap-nav-sub2' + (isSel ? ' active' : '') + '" onclick="showIncentiveSource(\'' + subArg + '\')">' + esc(sub) + '</button>');
-          });
-        }
+        var inner = incOpt('G:' + group, group + ' 全体', isGroupSel);
+        INFLUENCER_GROUPS[group].forEach(function(sub) { inner += incOpt('S:' + sub, sub, currentIncentiveSource === sub); });
+        selectOpts.push('<optgroup label="' + esc(group) + '">' + inner + '</optgroup>');
       } else {
-        var arg = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        var isSel2 = currentIncentiveSource === name;
-        sidebarItems.push('<button class="snap-nav-item' + (isSel2 ? ' active' : '') + '" onclick="showIncentiveSource(\'' + arg + '\')">' + esc(name) + '</button>');
+        selectOpts.push(incOpt('S:' + name, name, currentIncentiveSource === name));
       }
     });
   }
 
-  var sidebarHtml = '<div class="snap-sidebar">' + navModeTabsHtml + sidebarItems.join('') + '</div>';
+  var selectLabel = incentiveNavMode === 'person' ? '担当者' : 'インフルエンサー';
+  var sidebarHtml = navModeTabsHtml + '<div class="nav-select-bar"><span class="nav-select-label">' + selectLabel + '</span><select class="nav-select" onchange="onIncentiveSelect(this.value)">' + selectOpts.join('') + '</select></div>';
 
   if (currentIncentiveGroup && !currentIncentiveSource) {
     var groupSources;
@@ -3077,12 +3065,12 @@ function renderManagersTab() {
       groupHeadingHtml = '<div class="incentive-head"><p class="incentive-title">' + groupTitleBase + '（集計）</p></div>';
     }
 
-    area.innerHTML = '<div class="snap-layout">' + sidebarHtml + '<div class="snap-main">' + groupHeadingHtml + groupMainHtml + '</div></div>';
+    area.innerHTML = '<div class="snap-layout snap-layout-col">' + sidebarHtml + '<div class="snap-main">' + groupHeadingHtml + groupMainHtml + '</div></div>';
     return;
   }
 
   if (!currentIncentiveSource) {
-    area.innerHTML = '<div class="snap-layout">' + sidebarHtml + '<div class="snap-main"><p class="empty">左からインフルエンサーを選んでください。</p></div></div>';
+    area.innerHTML = '<div class="snap-layout snap-layout-col">' + sidebarHtml + '<div class="snap-main"><p class="empty">上のボックスから' + selectLabel + 'を選んでください。</p></div></div>';
     return;
   }
 
@@ -3156,7 +3144,7 @@ function renderManagersTab() {
   var titleText = esc(currentIncentiveSource) + (currentIncentiveMonth === null ? 'のインセンティブ表（月別集計）' : (currentIncentiveMonth === '__ALL__' ? 'のインセンティブ表' : '　' + monthLabel + 'のインセンティブ表'));
   var headingHtml = '<div class="incentive-head"><p class="incentive-title">' + titleText + '</p>' + rateHtml + '<button class="incentive-add" onclick="addIncentiveRow()">＋ 行追加</button></div>';
 
-  area.innerHTML = '<div class="snap-layout">' + sidebarHtml + '<div class="snap-main">' + headingHtml + mainHtml + '</div></div>';
+  area.innerHTML = '<div class="snap-layout snap-layout-col">' + sidebarHtml + '<div class="snap-main">' + headingHtml + mainHtml + '</div></div>';
 }
 
 // 初期化

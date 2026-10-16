@@ -673,9 +673,14 @@ var SOURCE_PERSON_MAP = {
 };
 var influencerSubGroupOpen = {};
 
+function influencerSourcesOf(name) {
+  return INFLUENCER_GROUPS[name] ? INFLUENCER_GROUPS[name] : [name];
+}
+
 function toggleInfluencerSubGroup(name) {
-  influencerSubGroupOpen[name] = !influencerSubGroupOpen[name];
-  renderInfluencerTabs();
+  var alreadySelected = currentInfluencer === name;
+  influencerSubGroupOpen[name] = alreadySelected ? !influencerSubGroupOpen[name] : true;
+  showInfluencerTab(name);
 }
 
 function showTab(id) {
@@ -723,7 +728,7 @@ function renderInfluencerTabs() {
       renderedGroups[group] = true;
       var isOpen = !!influencerSubGroupOpen[group];
       var head = document.createElement('button');
-      head.className = 'snap-nav-sub-group tab-influencer';
+      head.className = 'snap-nav-sub-group tab-influencer' + (currentInfluencer === group ? ' active' : '');
       head.innerHTML = '<span>' + (isOpen ? '▼' : '▶') + '</span><span>' + esc(group) + '</span><span class="count">(' + INFLUENCER_GROUPS[group].length + ')</span>';
       head.onclick = function() { toggleInfluencerSubGroup(group); };
       anchor.insertAdjacentElement('afterend', head);
@@ -762,9 +767,10 @@ function showInfluencerTab(name) {
 
 function renderInfluencerPanel() {
   var name = currentInfluencer;
-  document.getElementById('influencerTitle').textContent = '👤 ' + name + ' の登録者';
+  document.getElementById('influencerTitle').textContent = '👤 ' + name + (INFLUENCER_GROUPS[name] ? ' 全体' : '') + ' の登録者';
 
-  var list = DATA.records.filter(function(r) { return r.source === name; });
+  var srcNames = influencerSourcesOf(name);
+  var list = DATA.records.filter(function(r) { return srcNames.indexOf(r.source) >= 0; });
   var total = list.filter(function(r) { return r.status !== 'ブロック'; }).length;
   var booked = list.filter(function(r) { return isBookedStatus(r.status); }).length;
   var closed = list.filter(function(r) { return isClosedStatus(r.status); }).length;
@@ -807,7 +813,8 @@ function toggleInfluencerStatusFilter(status) {
 }
 
 function renderInfluencerFilteredList() {
-  var list = DATA.records.filter(function(r) { return r.source === currentInfluencer; });
+  var srcNames = influencerSourcesOf(currentInfluencer);
+  var list = DATA.records.filter(function(r) { return srcNames.indexOf(r.source) >= 0; });
   renderInfluencerList(list);
 }
 
@@ -1011,7 +1018,7 @@ function openModal(id) {
   document.getElementById('f_name').value = r ? r.name || '' : '';
   document.getElementById('f_status').value = r ? r.status || DATA.statuses[0] : DATA.statuses[0];
   document.getElementById('f_registeredAt').value = r ? r.registeredAt || '' : new Date().toISOString().slice(0,10);
-  document.getElementById('f_source').value = r ? r.source || DATA.sources[0] : (currentInfluencer || DATA.sources[0]);
+  document.getElementById('f_source').value = r ? r.source || DATA.sources[0] : (currentInfluencer ? influencerSourcesOf(currentInfluencer)[0] : DATA.sources[0]);
   document.getElementById('f_lineId').value = r ? r.lineId || '' : '';
   document.getElementById('f_travelDate').value = r ? r.travelDate || '' : '';
   document.getElementById('f_consultationVenue').value = venue;

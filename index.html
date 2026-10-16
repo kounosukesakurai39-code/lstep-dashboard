@@ -2823,27 +2823,60 @@ function updateIncentiveRate(value) {
   renderManagersTab();
 }
 
+var INCENTIVE_FOLLOW_KEYS = ['join', 'name', 'region', 'hospital', 'amount', 'note'];
+
+function incentiveFieldsFromRecord(rec) {
+  return {
+    join: rec.registeredAt || '',
+    name: rec.name || '',
+    region: rec.location || '',
+    hospital: rec.surgeryVenue || rec.consultationVenue || '',
+    amount: rec.revenue || '',
+    note: rec.note || ''
+  };
+}
+
 function syncIncentiveRowsFromRecords(source) {
   var linkedRecordIds = {};
   DATA.incentiveRows.forEach(function(r) { if (r.source === source && r.recordId) linkedRecordIds[r.recordId] = true; });
   var traveled = DATA.records.filter(function(r) { return r.source === source && isTravelStatus(r.status); });
-  var added = false;
+  var changed = false;
+  var syncRate = Number(DATA.incentiveRates[source]);
+
   traveled.forEach(function(rec) {
     if (linkedRecordIds[rec.id]) return;
+    var fields = incentiveFieldsFromRecord(rec);
     var row = { id: DATA.nextIncentiveId++, source: source, recordId: rec.id };
     INCENTIVE_COLUMNS.forEach(function(c) { if (!c.computed) row[c.key] = ''; });
-    row.join = rec.registeredAt || '';
-    row.name = rec.name || '';
-    row.region = rec.location || '';
-    row.hospital = rec.surgeryVenue || rec.consultationVenue || '';
-    row.amount = rec.revenue || '';
-    row.note = rec.note || '';
-    var syncRate = Number(DATA.incentiveRates[source]);
+    INCENTIVE_FOLLOW_KEYS.forEach(function(k) { row[k] = fields[k]; });
     if (syncRate && row.amount) row.bonus = String(incentiveBonusYen(row.amount, syncRate));
+    row._rec = fields;
     DATA.incentiveRows.push(row);
-    added = true;
+    changed = true;
   });
-  if (added) save();
+
+  // 自動追加済みの行は、インフルエンサー側で値が変わった項目だけ追従させる
+  // (変わっていない項目は、インセンティブ表で手入力した値をそのまま残す)
+  DATA.incentiveRows.forEach(function(row) {
+    if (row.source !== source || !row.recordId) return;
+    var rec = DATA.records.find(function(r) { return r.id === row.recordId; });
+    if (!rec) return;
+    var fields = incentiveFieldsFromRecord(rec);
+    if (!row._rec) { row._rec = fields; changed = true; return; }
+    var rowChanged = false;
+    INCENTIVE_FOLLOW_KEYS.forEach(function(k) {
+      if (String(fields[k]) === String(row._rec[k])) return;
+      if (k === 'amount') {
+        var wasAuto = syncRate && String(row.bonus) === String(incentiveBonusYen(row.amount, syncRate));
+        if (wasAuto) row.bonus = fields.amount ? String(incentiveBonusYen(fields.amount, syncRate)) : '';
+      }
+      row[k] = fields[k];
+      rowChanged = true;
+    });
+    if (rowChanged) { row._rec = fields; changed = true; }
+  });
+
+  if (changed) save();
 }
 
 function deleteIncentiveRow(id) {

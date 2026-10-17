@@ -911,6 +911,11 @@ function isTravelStatus(status) {
   return status === '渡韓中' || status === 'ダウンタイム中（帰国後）' || status === 'リピーター' || status === 'リピーター候補';
 }
 
+// インセンティブ表に自動追加する状態: 成約確定以降(成約確定・渡韓前・渡韓中・ダウンタイム中・リピーター系)
+function isIncentiveStatus(status) {
+  return status === '成約確定' || status === '渡韓前' || isTravelStatus(status);
+}
+
 function isClosedStatus(status) {
   return status === '成約確定' || status === '渡韓前' || status === '交渉中' || isTravelStatus(status);
 }
@@ -2777,6 +2782,7 @@ function updateIncentiveRateFor(source, value) {
 }
 
 var INCENTIVE_COLUMNS = [
+  { key: 'status', label: '状態', computed: true },
   { key: 'join', label: '参加日' },
   { key: 'hospital', label: '病院' },
   { key: 'region', label: '地域' },
@@ -2821,6 +2827,12 @@ function incentiveFmtInput(el, sym) {
 
 function incentiveCellHtml(c, r) {
   var cls = incentiveColClass(c.key);
+  if (c.key === 'status') {
+    var srcRec = r.recordId ? DATA.records.find(function(x) { return x.id === r.recordId; }) : null;
+    if (!srcRec) return '<td class="num"></td>';
+    var stColor = statusColor(srcRec.status);
+    return '<td class="num"><span class="badge" style="background:' + stColor + '22;color:' + stColor + '">' + esc(srcRec.status) + '</span></td>';
+  }
   if (c.computed) {
     var cv = incentiveComputedValue(c.key, r);
     var txt = c.key === 'amountExTax' ? formatRevenue(cv) : formatYen(cv);
@@ -2945,7 +2957,7 @@ function incentiveFieldsFromRecord(rec) {
 function syncIncentiveRowsFromRecords(source) {
   var linkedRecordIds = {};
   DATA.incentiveRows.forEach(function(r) { if (r.source === source && r.recordId) linkedRecordIds[r.recordId] = true; });
-  var traveled = DATA.records.filter(function(r) { return r.source === source && isTravelStatus(r.status); });
+  var traveled = DATA.records.filter(function(r) { return r.source === source && isIncentiveStatus(r.status); });
   var changed = false;
   var syncRate = Number(DATA.incentiveRates[source]);
 
@@ -3127,7 +3139,7 @@ function renderManagersTab() {
       var thead2 = '<tr><th>アカウント</th><th>プラットフォーム</th>' + INCENTIVE_COLUMNS.map(function(c) { return '<th class="' + incentiveColClass(c.key) + '">' + esc(c.label) + '</th>'; }).join('') + '<th></th></tr>';
       var bodyRows2 = platRowsData.map(function(r) {
         var cells = INCENTIVE_COLUMNS.map(function(c) { return incentiveCellHtml(c, r); }).join('');
-        var autoBadge = r.recordId ? '<span class="incentive-auto-badge" title="渡韓済のためインフルエンサータブから自動追加">自動</span>' : '';
+        var autoBadge = r.recordId ? '<span class="incentive-auto-badge" title="成約確定以降のためインフルエンサータブから自動追加">自動</span>' : '';
         return '<tr><td class="cat-label">' + esc(r.source) + '</td><td class="cat-label">' + esc(getSourcePlatform(r.source)) + '</td>' + cells + '<td>' + autoBadge + '<button class="incentive-del" onclick="deleteIncentiveRow(' + r.id + ')" title="削除">×</button></td></tr>';
       }).join('');
       groupMainHtml = '<button class="incentive-back-btn" onclick="backToIncentiveGroupSummary()">← 集計に戻る</button>' + incentiveFilterBarHtml() + '<div class="table-wrap"><table class="incentive-table"><thead>' + thead2 + '</thead><tbody>' + bodyRows2 + '</tbody></table></div>';
@@ -3276,7 +3288,7 @@ function renderManagersTab() {
     var thead = '<tr>' + INCENTIVE_COLUMNS.map(function(c) { return '<th class="' + incentiveColClass(c.key) + '">' + esc(c.label) + '</th>'; }).join('') + '<th></th></tr>';
     var bodyRows = targetRows.map(function(r) {
       var cells = INCENTIVE_COLUMNS.map(function(c) { return incentiveCellHtml(c, r); }).join('');
-      var autoBadge = r.recordId ? '<span class="incentive-auto-badge" title="渡韓済のためインフルエンサータブから自動追加">自動</span>' : '';
+      var autoBadge = r.recordId ? '<span class="incentive-auto-badge" title="成約確定以降のためインフルエンサータブから自動追加">自動</span>' : '';
       return '<tr>' + cells + '<td>' + autoBadge + '<button class="incentive-del" onclick="deleteIncentiveRow(' + r.id + ')" title="削除">×</button></td></tr>';
     }).join('');
     var monthBackBtn = (currentIncentiveMonth !== '__ALL__') ? '<button class="incentive-back-btn" onclick="showIncentiveMonthlySummary()">← 月別に戻る</button>' : '';

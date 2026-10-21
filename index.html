@@ -254,6 +254,10 @@
   .hub-diff { color: #b3263e; font-weight: 700; }
   .hub-same { color: #1f8a4c; }
   .hub-guess { font-size: 0.75em; color: #b8860b; margin-left: 6px; }
+  .hub-click { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+  .hub-click:hover { background: #eef4f9; }
+  .hub-detail td { background: #f8fbfe; text-align: left !important; white-space: normal !important; padding: 10px 14px !important; font-size: 0.92em; color: #45566b; }
+  .hub-chip { display: inline-block; margin: 2px 8px 2px 0; padding: 3px 10px; border-radius: 999px; background: #e3eef8; color: #14548a; }
   .trend-box { margin-top: 28px; }
   .trend-controls { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; margin: 4px 0 12px; }
   .trend-seg { display: inline-flex; border: 1px solid #cfe0f0; border-radius: 9px; overflow: hidden; background: #fff; }
@@ -2308,6 +2312,50 @@ function hubApplyToSnapshots() {
 
 
 // ---- 流入経路別 推移表(LINE登録 → 来場 → 成約)
+var hubOpen = { day: null, trend: null };
+
+function hubToggle(which, key) {
+  hubOpen[which] = (hubOpen[which] === key ? null : key);
+  if (which === 'day') hubDrawDaily(); else hubDrawTrend();
+}
+
+// Lステップの経路名だけでは、どのアカウントか分かりにくいものの表示名(Navi側の数字と突き合わせて決めたもの)
+var HUB_ROUTE_NAMES = { '10.X(Twitter)': 'Navi公式X', '1.Instagram': 'Navi公式Instagram', '000.infoTwitter_流入経路': 'info X' };
+
+// 経路名を、人が読みやすい表示にする(例: 「村上「おしお」X」→「村上「おしお」X［おしお］」)
+function hubRouteLabel(inbox, raw) {
+  if (raw === null) return '（経路が分からない人）';
+  if (HUB_ROUTE_NAMES[hubRouteKey(raw)]) return HUB_ROUTE_NAMES[hubRouteKey(raw)];
+  var clean = String(raw).replace(/_?流入経路(\(.+?\))?$/, '').replace(/^\d+\.\s*/, '').trim();
+  var c = inbox.chan && inbox.chan[raw], sub = c && c[1];
+  if (!sub) { var v = HUB_ROUTE_FALLBACK[hubRouteKey(raw)]; if (v) sub = v.split('|')[1]; }
+  return (sub && clean.indexOf(sub) < 0) ? clean + '［' + sub + '］' : clean;
+}
+
+// 指定した段階・大分類・日付の範囲で、どの経路から何人か
+function hubBreakdown(inbox, stage, channel, inRange) {
+  var by = {};
+  var put = function(date, raw) {
+    if (!inRange(date)) return;
+    if (channel && (raw === null ? '未入力' : hubChannelOf(inbox, raw)) !== channel) return;
+    var k = raw === null ? ' none' : raw;
+    by[k] = (by[k] || 0) + 1;
+  };
+  if (stage === 'reg') {
+    ['first', 'rt'].forEach(function(k) { var st = inbox[k] || {}; Object.keys(st).forEach(function(h) { put(st[h][0], inbox.raws[st[h][1]]); }); });
+  } else {
+    var store = inbox[stage] || {};
+    Object.keys(store).forEach(function(h) { var r = hubUidRoute(inbox, h); put(store[h], r ? r.raw : null); });
+  }
+  return Object.keys(by).map(function(k) { return { label: hubRouteLabel(inbox, k === ' none' ? null : k), n: by[k] }; })
+    .sort(function(a, b) { return b.n - a.n; });
+}
+
+function hubDetailRow(colspan, title, items) {
+  return '<tr class="hub-detail"><td colspan="' + colspan + '"><b>' + esc(title) + '</b>　' +
+    items.map(function(i) { return '<span class="hub-chip">' + esc(i.label) + ' ' + i.n + '人</span>'; }).join('') + '</td></tr>';
+}
+
 var hubTrend = { year: null, month: '', channel: '', stage: 'reg' };
 var hubChart = null;
 var HUB_STAGE_NAMES = { reg: 'LINE登録', vis: '来場', con: '成約' };
@@ -2365,9 +2413,26 @@ function hubDrawTrend() {
     (hasVis ? kpi(T.vis, '来場', 'ひとつ前から ' + pct(T.vis, T.reg)) : '') +
     (hasCon ? kpi(T.con, '成約', 'ひとつ前から ' + pct(T.con, T.vis)) : '') + '</div>';
   var cell = function(has, n) { return has ? n.toLocaleString('ja-JP') : dash; };
+  var drillable = !hubTrend.channel;
+  var inSelTrend = function(date) { return date.slice(0, 4) === hubTrend.year && (!hubTrend.month || date.slice(5, 7) === hubTrend.month); };
+  var tcell = function(show, n, stage, name) {
+    if (!show) return '<td>' + dash + '</td>';
+    var txt = n.toLocaleString('ja-JP');
+    if (!drillable || !n) return '<td>' + txt + '</td>';
+    var key = (stage + '|' + name).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return '<td class="hub-click" title="タップすると内訳が出ます" onclick="hubToggle(\'trend\', \'' + key + '\')">' + txt + '</td>';
+  };
   var body = r.rows.map(function(x) {
-    return '<tr><td class="l">' + esc(x.name) + '</td><td>' + x.reg.toLocaleString('ja-JP') + '</td><td>' + cell(hasVis, x.vis) + '</td><td>' + cell(hasCon, x.con) + '</td>' +
+    var rowHtml = '<tr><td class="l">' + esc(x.name) + '</td>' + tcell(true, x.reg, 'reg', x.name) + tcell(hasVis, x.vis, 'vis', x.name) + tcell(hasCon, x.con, 'con', x.name) +
       '<td>' + (hasVis ? pct(x.vis, x.reg) : dash) + '</td><td>' + (hasVis && hasCon ? pct(x.con, x.vis) : dash) + '</td></tr>';
+    if (drillable && hubOpen.trend && hubOpen.trend.indexOf('|' + x.name) > 0) {
+      var st = hubOpen.trend.split('|')[0];
+      if (hubOpen.trend === st + '|' + x.name) {
+        var items = hubBreakdown(hubInbox, st, x.name, inSelTrend);
+        rowHtml += hubDetailRow(6, x.name + 'の' + HUB_STAGE_NAMES[st] + 'の内訳', items);
+      }
+    }
+    return rowHtml;
   }).join('');
   var table = '<div style="overflow-x:auto"><table class="hub-table"><thead><tr><th class="l">流入経路</th><th>LINE登録</th><th>来場</th><th>成約</th><th>LINE登録→来場</th><th>来場→成約</th></tr></thead><tbody>' + body +
     '<tr style="font-weight:700;background:#f4f8fc"><td class="l">合計</td><td>' + T.reg.toLocaleString('ja-JP') + '</td><td>' + cell(hasVis, T.vis) + '</td><td>' + cell(hasCon, T.con) + '</td><td>' + (hasVis ? pct(T.vis, T.reg) : dash) + '</td><td>' + (hasVis && hasCon ? pct(T.con, T.vis) : dash) + '</td></tr></tbody></table></div>';
@@ -2505,10 +2570,24 @@ function hubDrawDaily() {
     if (!future) { weekSum.total += rec.total; r.cols.forEach(function(c) { weekSum.by[c] = (weekSum.by[c] || 0) + (rec.by[c] || 0); }); }
     var color = wd === 0 ? 'color:#c0304a' : (wd === 6 ? 'color:#14548a' : '');
     var partial = asOfDate && date === asOfDate;
-    var tdv = function(n) { return future ? '<td style="color:#c0c9d4">-</td>' : '<td>' + (n || '<span style="color:#c0c9d4">0</span>') + '</td>'; };
+    var drill = !hubDay.channel;
+    var keyFor = function(col) { return (date + '|' + col).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); };
+    var tdv = function(n, col) {
+      if (future) return '<td style="color:#c0c9d4">-</td>';
+      if (!n) return '<td><span style="color:#c0c9d4">0</span></td>';
+      return drill ? '<td class="hub-click" title="タップすると内訳が出ます" onclick="hubToggle(\'day\', \'' + keyFor(col) + '\')">' + n + '</td>' : '<td>' + n + '</td>';
+    };
     rows += '<tr><td class="l" style="' + color + '">' + m + '/' + d + ' <span style="font-size:0.85em">(' + wdName[wd] + ')</span>' + (partial ? ' <span style="color:#b8860b;font-size:0.8em">途中</span>' : '') + '</td>' +
-      (future ? '<td style="color:#c0c9d4">-</td>' : '<td style="font-weight:600;' + (isSpike(rec.total) ? 'background:#fff4d6;color:#8a5a00' : '') + '">' + (rec.total || '<span style="color:#c0c9d4">0</span>') + '</td>') +
-      r.cols.map(function(c) { return tdv(rec.by[c]); }).join('') + '</tr>';
+      (future ? '<td style="color:#c0c9d4">-</td>' : (rec.total && drill
+        ? '<td class="hub-click" title="タップすると内訳が出ます" style="font-weight:600;' + (isSpike(rec.total) ? 'background:#fff4d6;color:#8a5a00' : '') + '" onclick="hubToggle(\'day\', \'' + keyFor('__all__') + '\')">' + rec.total + '</td>'
+        : '<td style="font-weight:600;' + (isSpike(rec.total) ? 'background:#fff4d6;color:#8a5a00' : '') + '">' + (rec.total || '<span style="color:#c0c9d4">0</span>') + '</td>')) +
+      r.cols.map(function(c) { return tdv(rec.by[c], c); }).join('') + '</tr>';
+    if (hubOpen.day && hubOpen.day.indexOf(date + '|') === 0) {
+      var openCol = hubOpen.day.slice(date.length + 1);
+      var isAll = openCol === '__all__';
+      var itemsD = hubBreakdown(hubInbox, hubDay.stage, isAll ? '' : openCol, function(x) { return x === date; });
+      rows += hubDetailRow(2 + r.cols.length, m + '/' + d + ' の ' + (isAll ? '' : openCol + ' の ') + HUB_STAGE_NAMES[hubDay.stage] + 'の内訳', itemsD);
+    }
     if (wd === 0 || d === lastDay) flushWeek(d);
   }
   var monthTotal = Object.keys(totals).reduce(function(a, k) { return a + totals[k].total; }, 0);

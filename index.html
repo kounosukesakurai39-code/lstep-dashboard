@@ -30,7 +30,7 @@
   .tab.active { background: #1a6090; color: #fff; border-color: #1a6090; }
 
   .panel { max-width: 1000px; margin: 0 auto; display: none; }
-  #panel-snapshot, #panel-managers { max-width: none; }
+  #panel-snapshot, #panel-managers, #panel-hub { max-width: none; }
   .panel.active { display: block; }
 
   .toolbar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
@@ -235,6 +235,25 @@
   .nav-select:focus { outline: 2px solid #14548a; outline-offset: -2px; }
   .chart-source-select { border: 1px solid #cfe0f0; border-radius: 8px; padding: 7px 12px; background: #fff; color: #14548a; font: inherit; font-weight: 600; max-width: 320px; }
   .rank-sub { font-size: 0.82em; color: #7c8ca0; margin: 6px 0 18px; }
+  .hub-card { background: #fff; border: 1px solid #e5eaf0; border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; }
+  .hub-card h3 { font-size: 0.98em; color: #163a5c; margin-bottom: 4px; }
+  .hub-card .hub-sub { font-size: 0.8em; color: #7c8ca0; margin-bottom: 12px; line-height: 1.6; }
+  .hub-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+  .hub-row label { font-size: 0.82em; color: #55677e; min-width: 56px; }
+  .hub-input { flex: 1; min-width: 240px; padding: 9px 12px; border: 1px solid #d5dee8; border-radius: 8px; font: inherit; font-size: 0.88em; }
+  .hub-msg { font-size: 0.85em; margin-top: 8px; padding: 9px 12px; border-radius: 8px; background: #f4f8fc; color: #14548a; white-space: pre-wrap; }
+  .hub-msg.err { background: #fdecee; color: #b3263e; }
+  .hub-kpis { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .hub-kpis .kpi-card { min-width: 150px; }
+  .hub-kpis .kpi-card .val { font-size: 1.15em; }
+  .hub-table { width: 100%; border-collapse: collapse; font-size: 0.84em; }
+  .hub-table th, .hub-table td { padding: 8px 10px; border-bottom: 1px solid #eef1f5; text-align: center; white-space: nowrap; }
+  .hub-table th { background: #fafbfd; color: #55677e; font-weight: 600; }
+  .hub-table td.l, .hub-table th.l { text-align: left; }
+  .hub-table select { max-width: 360px; padding: 6px 8px; border: 1px solid #d5dee8; border-radius: 7px; font: inherit; font-size: 0.95em; }
+  .hub-diff { color: #b3263e; font-weight: 700; }
+  .hub-same { color: #1f8a4c; }
+  .hub-guess { font-size: 0.75em; color: #b8860b; margin-left: 6px; }
   .trend-box { margin-top: 28px; }
   .trend-controls { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; margin: 4px 0 12px; }
   .trend-seg { display: inline-flex; border: 1px solid #cfe0f0; border-radius: 9px; overflow: hidden; background: #fff; }
@@ -335,6 +354,7 @@
     <button class="tab" id="tabbtn-snapshot" onclick="showTab('snapshot')">📅 月次集計</button>
     <button class="tab" id="tabbtn-ranking" onclick="showTab('ranking')">📊 ダッシュボード</button>
     <button class="tab" id="tabbtn-managers" onclick="showTab('managers')">👤 インセンティブ表</button>
+    <button class="tab" id="tabbtn-hub" onclick="showTab('hub')">🔌 Lステップ連携</button>
     <button class="tab" id="tabbtn-settings" onclick="showTab('settings')">⚙️ 設定</button>
   </div>
 </nav>
@@ -351,6 +371,11 @@
   </div>
   <p class="count" id="countLabel"></p>
   <div id="listArea"><p class="loading">読み込み中...</p></div>
+</div>
+
+<!-- Lステップ連携（受け口） -->
+<div class="panel" id="panel-hub">
+  <div id="hubArea"></div>
 </div>
 
 <!-- インフルエンサー個別 -->
@@ -738,6 +763,7 @@ function showTab(id) {
   if (id === 'snapshot') renderSnapshotTab();
   if (id === 'ranking') renderRankingTab();
   if (id === 'managers') renderManagersGate();
+  if (id === 'hub') renderHubTab();
 }
 
 function toggleInfluencerGroup() {
@@ -1928,6 +1954,342 @@ function categoryPriority(sample) {
   var g = categoryGroup(sample);
   var idx = CATEGORY_ORDER_OVERRIDE.indexOf(sample.category);
   return [midTabPriority(g), idx >= 0 ? idx : 999];
+}
+
+// ---------------------------------------------------------------- Lステップ連携（受け口）
+// 中間システム(GAS)から pull → 保存 → ack する。URLと合言葉は、このブラウザの localStorage にだけ置く(コードには入れない)。
+// 届いた記録は、Supabase の app_data id=2 に「集計」として溜める(友だちIDそのものは保存せず、重複を除くための目印だけ)。
+var HUB_CONN_KEY = 'lstepHubConn';
+var HUB_ROW_URL = SUPABASE_URL + '/rest/v1/app_data';
+var hubInbox = null, hubBusy = false, hubMsg = '', hubMsgErr = false, hubMonth = null, hubReplaceZero = false;
+
+function hubConn() { try { return JSON.parse(localStorage.getItem(HUB_CONN_KEY) || '{}'); } catch (e) { return {}; } }
+function hubNewInbox() { return { v: 1, lastId: 0, asOf: '', lastPulledAt: '', raws: [], counts: {}, first: {}, map: {} }; }
+
+function hubHash(str) {
+  var h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (var i = 0, ch; i < str.length; i++) {
+    ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+
+function hubLoadInbox() {
+  return fetch(HUB_ROW_URL + '?id=eq.2&select=data', { headers: SUPABASE_HEADERS })
+    .then(function(r) { return r.json(); })
+    .then(function(rows) {
+      var d = rows[0] && rows[0].data;
+      hubInbox = (d && d.v === 1 && d.counts) ? Object.assign(hubNewInbox(), d) : hubNewInbox();
+    });
+}
+
+function hubSaveInbox() {
+  var headers = Object.assign({}, SUPABASE_HEADERS, { 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates,return=minimal' });
+  return fetch(HUB_ROW_URL + '?on_conflict=id', { method: 'POST', headers: headers, body: JSON.stringify({ id: 2, data: hubInbox }) })
+    .then(function(r) { if (!r.ok) throw new Error('受け口の保存に失敗しました(' + r.status + ')'); });
+}
+
+function hubCall(action, params) {
+  var c = hubConn();
+  if (!c.url || !c.key) return Promise.reject(new Error('URLと合言葉を入力して「保存」してください'));
+  var q = ['a=' + action, 'key=' + encodeURIComponent(c.key)];
+  Object.keys(params || {}).forEach(function(k) { q.push(encodeURIComponent(k) + '=' + encodeURIComponent(params[k])); });
+  return fetch(c.url + (c.url.indexOf('?') >= 0 ? '&' : '?') + q.join('&'))
+    .then(function(r) { return r.json(); });
+}
+
+// 'YYYY-MM-DD...' → 'YYYY-MM-P1/P2/P3' (1〜10日 / 11〜20日 / 21日〜)
+function hubPeriodKey(at) {
+  var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(at || ''));
+  if (!m) return null;
+  var d = parseInt(m[3], 10);
+  return m[1] + '-' + m[2] + '-P' + (d <= 10 ? 1 : d <= 20 ? 2 : 3);
+}
+
+function hubPeriodEnd(period) {
+  var m = /^(\d{4})-(\d{2})-P(\d)$/.exec(period);
+  var y = parseInt(m[1], 10), mo = parseInt(m[2], 10), p = parseInt(m[3], 10);
+  var day = p === 1 ? 10 : p === 2 ? 20 : new Date(y, mo, 0).getDate();
+  return m[1] + '-' + m[2] + '-' + (day < 10 ? '0' + day : day);
+}
+
+function hubBump(inbox, raw, period, delta) {
+  var c = inbox.counts[raw] || (inbox.counts[raw] = {});
+  c[period] = Math.max(0, (c[period] || 0) + delta);
+}
+
+function hubRawIdx(inbox, raw) {
+  var i = inbox.raws.indexOf(raw);
+  if (i < 0) { inbox.raws.push(raw); i = inbox.raws.length - 1; }
+  return i;
+}
+
+// 受け取った行を集計に足す。同じ行(id)が何度来ても、結果は変わらない。
+// 登録数 = 初回の通過。first_pass が "true" の行はそのまま数え、"false" は数えず、
+// 空の行(過去分)は、友だちごとに「いちばん古い日」の1回だけを数える。
+function hubApplyRows(inbox, rows) {
+  var startId = inbox.lastId, processed = 0;
+  rows.forEach(function(r) {
+    var id = Number(r.id);
+    if (!(id > startId)) return;
+    if (r.group !== '流入経路') return;
+    var period = hubPeriodKey(r.event_at);
+    if (!period) return;
+    var raw = r.channel_raw || r.channel || '(経路不明)';
+    var fp = String(r.first_pass == null ? '' : r.first_pass).toLowerCase();
+    if (fp === 'false') return;
+    processed++;
+    if (fp === 'true') { hubBump(inbox, raw, period, 1); return; }
+    var uid = String(r.uid || '');
+    if (!uid) return;
+    var h = hubHash(uid), date = String(r.event_at).slice(0, 10), idx = hubRawIdx(inbox, raw), prev = inbox.first[h];
+    if (!prev) {
+      inbox.first[h] = [date, idx];
+      hubBump(inbox, raw, period, 1);
+    } else if (date < prev[0]) {
+      hubBump(inbox, inbox.raws[prev[1]], hubPeriodKey(prev[0]), -1);
+      inbox.first[h] = [date, idx];
+      hubBump(inbox, raw, period, 1);
+    }
+  });
+  return processed;
+}
+
+function hubTargets() {
+  var out = [], seen = {};
+  DATA.snapshots.forEach(function(s) {
+    if (s.business !== 'SNS増加数' || String(s.metric).indexOf('LINE登録') !== 0) return;
+    var k = s.category + '｜' + s.metric;
+    if (seen[k]) return;
+    seen[k] = true;
+    out.push({ value: k, category: s.category, metric: s.metric, group: s.group });
+  });
+  return out;
+}
+
+var HUB_GUESS = {
+  '村上「おしお」X': 'おしお - おしお twitter｜LINE登録',
+  '10.naviX（Twitter）': 'Navi official - navi twitter｜LINE登録',
+  '000.infoX(Twitter)': 'info - X｜LINE登録',
+  '000.info Twitter': 'info - X｜LINE登録',
+  'info note': 'info - note｜LINE登録',
+  'Emma様紹介': 'Emma - Emma X｜LINE登録',
+  'ナビnote': 'ナビ - note｜LINE登録'
+};
+
+function hubGuess(raw) {
+  var key = String(raw).replace(/_?流入経路(\(.+?\))?$/, '').trim();
+  return HUB_GUESS[key] || null;
+}
+
+function hubAutoMap() {
+  var valid = {};
+  hubTargets().forEach(function(t) { valid[t.value] = true; });
+  Object.keys(hubInbox.counts).forEach(function(raw) {
+    if (hubInbox.map[raw] !== undefined) return;
+    var g = hubGuess(raw);
+    if (g && valid[g]) hubInbox.map[raw] = { t: g, guess: true };
+  });
+}
+
+function hubSaveConn() {
+  var url = document.getElementById('hubUrl').value.trim();
+  var key = document.getElementById('hubKey').value.trim();
+  try { localStorage.setItem(HUB_CONN_KEY, JSON.stringify({ url: url, key: key })); } catch (e) {}
+  hubMsg = 'このブラウザに保存しました（画面のコードやGitには入りません）。'; hubMsgErr = false;
+  renderHubTab();
+}
+
+function hubTest() {
+  hubMsg = '接続を確かめています…'; hubMsgErr = false; renderHubTab(true);
+  hubCall('pull', { limit: 1 }).then(function(r) {
+    if (!r.ok) { hubMsg = '接続できましたが、中間システムがエラーを返しました: ' + r.error + (r.error === 'unauthorized' ? '\n合言葉が違う、または末端が「停止」になっています。' : ''); hubMsgErr = true; }
+    else {
+      var sample = (r.rows && r.rows[0]) ? '\n見本の1件: 経路「' + (r.rows[0].channel_raw || r.rows[0].channel || '') + '」/ ' + (r.rows[0].event_at || '') : '';
+      hubMsg = '接続できました。\nデータは ' + (r.as_of ? r.as_of + ' 時点まで' : '（時点の記録なし）') + '。受け取り待ちの続きがあるか: ' + (r.has_more ? 'あります' : 'ありません') + sample + '\n※接続テストでは「受け取り済み」は進みません。';
+    }
+  }).catch(function(e) {
+    hubMsg = '接続できませんでした: ' + e.message + '\nURLが「…/exec」で終わっているか、中間システムを「全員」が使える設定で公開しているかを確認してください。'; hubMsgErr = true;
+  }).then(function() { renderHubTab(); });
+}
+
+async function hubSync() {
+  if (hubBusy) return;
+  hubBusy = true; hubMsg = '取り込み中…'; hubMsgErr = false; renderHubTab(true);
+  try {
+    await hubLoadInbox();
+    var total = 0, rounds = 0, prevUpto = -1;
+    while (rounds++ < 1000) {
+      var r = await hubCall('pull', { limit: 200 });
+      if (!r.ok) throw new Error('中間システムがエラーを返しました: ' + r.error);
+      var upto = Number(r.upto) || 0;
+      total += hubApplyRows(hubInbox, r.rows || []);
+      if (r.as_of) hubInbox.asOf = r.as_of;
+      hubInbox.lastId = Math.max(hubInbox.lastId, upto);
+      hubInbox.lastPulledAt = new Date().toISOString();
+      hubAutoMap();
+      await hubSaveInbox();
+      if (upto > 0) {
+        var a = await hubCall('ack', { upto: upto });
+        if (!a.ok) throw new Error('「受け取れた」の返却に失敗しました: ' + a.error);
+      }
+      if (!r.has_more || upto <= prevUpto) break;
+      prevUpto = upto;
+    }
+    hubMsg = '取り込みました。今回、登録として数えた記録: ' + total + '件。'; hubMsgErr = false;
+  } catch (e) {
+    hubMsg = 'エラー: ' + e.message + '\n※途中まで取り込めた分は保存済みです。もう一度「取り込む」を押せば、続きから取り込みます。'; hubMsgErr = true;
+  } finally {
+    hubBusy = false; renderHubTab();
+  }
+}
+
+function hubSetMap(raw, val) {
+  hubInbox.map[raw] = val ? { t: val } : { t: '' };
+  hubSaveInbox().then(function() { toast('✅ 対応を保存しました'); renderHubTab(); }).catch(function(e) { toast('⚠️ ' + e.message); });
+}
+
+function hubSetMonth(m) { hubMonth = m; renderHubTab(); }
+function hubSetReplaceZero(v) { hubReplaceZero = !!v; renderHubTab(); }
+
+function hubComputeAuto() {
+  // 対応づけたアカウント(target)ごとに、期間ごとの登録数を足し合わせる
+  var auto = {};
+  Object.keys(hubInbox.counts).forEach(function(raw) {
+    var m = hubInbox.map[raw];
+    if (!m || !m.t) return;
+    var a = auto[m.t] || (auto[m.t] = {});
+    Object.keys(hubInbox.counts[raw]).forEach(function(p) { a[p] = (a[p] || 0) + hubInbox.counts[raw][p]; });
+  });
+  return auto;
+}
+
+function hubManual(category, metric, period) {
+  var v;
+  DATA.snapshots.forEach(function(s) {
+    if (s.business === 'SNS増加数' && s.category === category && s.metric === metric && s.date === period) v = s.value;
+  });
+  return v;
+}
+
+function hubApplyToSnapshots() {
+  var auto = hubComputeAuto(), month = hubMonth, today = new Date().toISOString().slice(0, 10), made = 0, replaced = 0, skipped = 0;
+  var targetsByValue = {};
+  hubTargets().forEach(function(t) { targetsByValue[t.value] = t; });
+  Object.keys(auto).forEach(function(tv) {
+    var t = targetsByValue[tv];
+    if (!t) return;
+    [1, 2, 3].forEach(function(n) {
+      var period = month + '-P' + n;
+      if (hubPeriodEnd(period) >= today) { skipped++; return; }   // まだ終わっていない期間は反映しない
+      var val = auto[tv][period] || 0;
+      var existing = DATA.snapshots.find(function(s) { return s.business === 'SNS増加数' && s.category === t.category && s.metric === t.metric && s.date === period; });
+      if (!existing) {
+        DATA.snapshots.push({ id: DATA.nextSnapshotId++, business: 'SNS増加数', category: t.category, metric: t.metric, date: period, value: val, group: t.group });
+        made++;
+      } else if (hubReplaceZero && Number(existing.value) === 0 && val > 0) {
+        existing.value = val; replaced++;
+      }
+    });
+  });
+  if (made || replaced) save();
+  toast('✅ 反映しました（新規 ' + made + '件' + (replaced ? '、0を置き換え ' + replaced + '件' : '') + '）。手入力済みの値はそのままです。');
+  renderHubTab();
+}
+
+function renderHubTab(keepScroll) {
+  var area = document.getElementById('hubArea');
+  if (!area) return;
+  if (!hubInbox) {
+    area.innerHTML = '<p class="loading">読み込み中...</p>';
+    hubLoadInbox().then(function() { hubAutoMap(); renderHubTab(); }).catch(function() { hubInbox = hubNewInbox(); renderHubTab(); });
+    return;
+  }
+  var c = hubConn();
+  var connected = !!(c.url && c.key);
+  var targets = hubTargets();
+  var rawNames = Object.keys(hubInbox.counts).filter(function(raw) {
+    return Object.keys(hubInbox.counts[raw]).some(function(p) { return hubInbox.counts[raw][p] > 0; });
+  });
+  var totalOf = function(raw) { return Object.keys(hubInbox.counts[raw]).reduce(function(a, p) { return a + hubInbox.counts[raw][p]; }, 0); };
+  rawNames.sort(function(a, b) { return totalOf(b) - totalOf(a); });
+
+  var kpis = '<div class="hub-kpis">' +
+    '<div class="kpi-card"><div class="val">' + hubInbox.lastId.toLocaleString('ja-JP') + '</div><div class="label">取り込み済みの記録(id)</div></div>' +
+    '<div class="kpi-card"><div class="val">' + esc(hubInbox.asOf || '-') + '</div><div class="label">データの時点（中間システム）</div></div>' +
+    '<div class="kpi-card"><div class="val">' + (hubInbox.lastPulledAt ? esc(new Date(hubInbox.lastPulledAt).toLocaleString('ja-JP')) : '-') + '</div><div class="label">最後に取り込んだ日時</div></div>' +
+    '<div class="kpi-card"><div class="val">' + rawNames.length + '</div><div class="label">流入経路の数</div></div>' +
+    '</div>';
+
+  var connHtml = '<div class="hub-card"><h3>① 接続</h3>' +
+    '<p class="hub-sub">中間システムのスプレッドシートで「末端を追加」して発行した、URL（…/exec）と合言葉を入れます。<b>このブラウザにだけ保存</b>され、画面のコードやGitには入りません。他のPCで使うときは、そのPCでも入力してください。</p>' +
+    '<div class="hub-row"><label>URL</label><input class="hub-input" id="hubUrl" type="text" placeholder="https://script.google.com/macros/s/…/exec" value="' + esc(c.url || '') + '"></div>' +
+    '<div class="hub-row"><label>合言葉</label><input class="hub-input" id="hubKey" type="password" autocomplete="off" placeholder="tk_…" value="' + esc(c.key || '') + '"></div>' +
+    '<div class="hub-row"><button class="btn" onclick="hubSaveConn()">保存</button>' +
+    '<button class="btn gray" onclick="hubTest()"' + (hubBusy ? ' disabled' : '') + '>接続テスト</button></div></div>';
+
+  var syncHtml = '<div class="hub-card"><h3>② 取り込み</h3>' +
+    '<p class="hub-sub">中間システムから記録を受け取り、保存できてから「受け取れた」を返します（途中で止まっても、続きから再開できます）。人数だけを集計して保存し、友だちIDそのものは保存しません。</p>' +
+    '<div class="hub-row"><button class="btn green" onclick="hubSync()"' + ((hubBusy || !connected) ? ' disabled' : '') + '>🔄 取り込む</button>' +
+    (connected ? '' : '<span style="font-size:0.82em;color:#b3263e">先に①で接続を保存してください</span>') + '</div>' +
+    (hubMsg ? '<div class="hub-msg' + (hubMsgErr ? ' err' : '') + '">' + esc(hubMsg) + '</div>' : '') + '</div>';
+
+  // ③ 経路 → アカウントの対応
+  var mapRows = rawNames.map(function(raw) {
+    var m = hubInbox.map[raw] || {};
+    var arg = raw.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    var opts = '<option value="">反映しない</option>' + targets.map(function(t) {
+      return '<option value="' + esc(t.value) + '"' + (m.t === t.value ? ' selected' : '') + '>' + esc(t.category + (t.metric === 'LINE登録' ? '' : '（' + t.metric + '）')) + '</option>';
+    }).join('');
+    return '<tr><td class="l">' + esc(raw) + '</td><td>' + totalOf(raw).toLocaleString('ja-JP') + '</td>' +
+      '<td class="l"><select onchange="hubSetMap(\'' + arg + '\', this.value)">' + opts + '</select>' + (m.guess ? '<span class="hub-guess">自動候補</span>' : '') + '</td></tr>';
+  }).join('');
+  var mapHtml = '<div class="hub-card"><h3>③ 流入経路 → SNS増加数のアカウント</h3>' +
+    '<p class="hub-sub">Lステップの流入経路ごとに、「SNS増加数」のどのアカウントのLINE登録にするかを選びます。「自動候補」は名前から推測したもので、選び直せます。複数の経路を同じアカウントにすると、合計されます。</p>' +
+    (rawNames.length ? '<div style="overflow-x:auto"><table class="hub-table"><thead><tr><th class="l">Lステップの流入経路名</th><th>登録数(合計)</th><th class="l">反映先</th></tr></thead><tbody>' + mapRows + '</tbody></table></div>'
+      : '<p class="empty">まだ取り込んだ記録がありません。②で「取り込む」を押してください。</p>') + '</div>';
+
+  // ④ 突き合わせ
+  var auto = hubComputeAuto();
+  var months = {};
+  Object.keys(auto).forEach(function(tv) { Object.keys(auto[tv]).forEach(function(p) { months[p.slice(0, 7)] = true; }); });
+  var monthList = Object.keys(months).sort().reverse();
+  if (!hubMonth || monthList.indexOf(hubMonth) < 0) hubMonth = monthList[0] || null;
+  var cmpHtml = '<div class="hub-card"><h3>④ 手入力との突き合わせ</h3>' +
+    '<p class="hub-sub">自動の集計と、いま「SNS増加数」に入っている手入力を並べます（<b>自動 / 手入力</b>）。数字が合うことを確かめてから、空欄だけを埋めます。手入力した値は、上書きしません。</p>';
+  if (!monthList.length) {
+    cmpHtml += '<p class="empty">③で反映先を選ぶと、ここに表示されます。</p></div>';
+  } else {
+    var tvs = Object.keys(auto).sort();
+    var targetsByValue = {};
+    targets.forEach(function(t) { targetsByValue[t.value] = t; });
+    var body = tvs.map(function(tv) {
+      var t = targetsByValue[tv];
+      if (!t) return '';
+      var cells = [1, 2, 3].map(function(n) {
+        var period = hubMonth + '-P' + n;
+        var a = auto[tv][period] || 0, mv = hubManual(t.category, t.metric, period);
+        var open = hubPeriodEnd(period) >= new Date().toISOString().slice(0, 10);
+        var cls = mv === undefined ? '' : (Number(mv) === a ? 'hub-same' : 'hub-diff');
+        return '<td class="' + cls + '">' + a + ' / ' + (mv === undefined ? '-' : mv) + (open ? ' <span style="color:#b8860b;font-size:0.8em">(途中)</span>' : '') + '</td>';
+      }).join('');
+      return '<tr><td class="l">' + esc(t.category + (t.metric === 'LINE登録' ? '' : '（' + t.metric + '）')) + '</td>' + cells + '</tr>';
+    }).join('');
+    cmpHtml += '<div class="hub-row"><label>月</label><select class="year-select" onchange="hubSetMonth(this.value)">' +
+      monthList.map(function(m) { return '<option value="' + m + '"' + (m === hubMonth ? ' selected' : '') + '>' + esc(formatMonth(m)) + '</option>'; }).join('') + '</select>' +
+      '<label style="min-width:0"><input type="checkbox"' + (hubReplaceZero ? ' checked' : '') + ' onchange="hubSetReplaceZero(this.checked)"> 手入力が0のところも置き換える</label></div>' +
+      '<div style="overflow-x:auto"><table class="hub-table"><thead><tr><th class="l">アカウント</th><th>1〜10日</th><th>11〜20日</th><th>21日〜月末</th></tr></thead><tbody>' + body + '</tbody></table></div>' +
+      '<div class="hub-row" style="margin-top:12px"><button class="btn green" onclick="hubApplyToSnapshots()">この月の空欄をSNS増加数に反映</button>' +
+      '<span style="font-size:0.8em;color:#7c8ca0">まだ終わっていない期間（途中）は反映しません。</span></div></div>';
+  }
+
+  var scrollY = window.scrollY;
+  area.innerHTML = '<div class="rank-header" style="margin-bottom:12px"><h2 class="rank-h2">🔌 Lステップ連携（受け口）</h2></div>' + kpis + connHtml + syncHtml + mapHtml + cmpHtml;
+  if (keepScroll) window.scrollTo(0, scrollY);
 }
 
 function populateSnapshotDatalists() {

@@ -2028,25 +2028,49 @@ function hubRawIdx(inbox, raw) {
   return i;
 }
 
-// 受け取った行を集計に足す。同じ行(id)が何度来ても、結果は変わらない。
+// 受け取った行を集計に足す。同じ行(id)が何度来ても、結果は変わらない(グループごとに、取り込み済みidを覚える)。
 // 登録数 = 初回の通過。first_pass が "true" の行はそのまま数え、"false" は数えず、
 // 空の行(過去分)は、友だちごとに「いちばん古い日」の1回だけを数える。
+// 来場・成約確定は、友だちごとに「いちばん古い日」を1回だけ覚える(どの経路の人かは、表を出すときに結びつける)。
+var HUB_STAGE_GROUPS = { '来場': 'vis', '成約確定': 'con' };
+
 function hubApplyRows(inbox, rows) {
-  var startId = inbox.lastId, processed = 0;
+  inbox.lastIdBy = inbox.lastIdBy || {};
+  inbox.rt = inbox.rt || {}; inbox.chan = inbox.chan || {}; inbox.vis = inbox.vis || {}; inbox.con = inbox.con || {};
+  if (inbox.lastIdBy['流入経路'] === undefined && inbox.lastId > 0) inbox.lastIdBy['流入経路'] = inbox.lastId;
+  var start = Object.assign({}, inbox.lastIdBy), seenMax = {}, processed = 0;
   rows.forEach(function(r) {
-    var id = Number(r.id);
-    if (!(id > startId)) return;
-    if (r.group !== '流入経路') return;
+    var id = Number(r.id), g = r.group;
+    var isStage = HUB_STAGE_GROUPS[g] !== undefined;
+    if (g !== '流入経路' && !isStage) return;
+    if (!(id > (start[g] || 0))) return;
+    seenMax[g] = Math.max(seenMax[g] || 0, id);
+    var uid = String(r.uid || '');
+    var date = String(r.event_at || '').slice(0, 10);
+    if (isStage) {
+      if (!uid || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+      var store = inbox[HUB_STAGE_GROUPS[g]], hh = hubHash(uid);
+      if (!store[hh] || date < store[hh]) store[hh] = date;
+      processed++;
+      return;
+    }
     var period = hubPeriodKey(r.event_at);
     if (!period) return;
     var raw = r.channel_raw || r.channel || '(経路不明)';
+    if (r.channel) inbox.chan[raw] = [r.channel, r.channel_sub || ''];
     var fp = String(r.first_pass == null ? '' : r.first_pass).toLowerCase();
     if (fp === 'false') return;
     processed++;
-    if (fp === 'true') { hubBump(inbox, raw, period, 1); return; }
-    var uid = String(r.uid || '');
+    if (fp === 'true') {
+      hubBump(inbox, raw, period, 1);
+      if (uid) {
+        var th = hubHash(uid), ti = hubRawIdx(inbox, raw), tp = inbox.rt[th];
+        if (!tp || date < tp[0]) inbox.rt[th] = [date, ti];
+      }
+      return;
+    }
     if (!uid) return;
-    var h = hubHash(uid), date = String(r.event_at).slice(0, 10), idx = hubRawIdx(inbox, raw), prev = inbox.first[h];
+    var h = hubHash(uid), idx = hubRawIdx(inbox, raw), prev = inbox.first[h];
     if (!prev) {
       inbox.first[h] = [date, idx];
       hubBump(inbox, raw, period, 1);
@@ -2056,7 +2080,88 @@ function hubApplyRows(inbox, rows) {
       hubBump(inbox, raw, period, 1);
     }
   });
+  Object.keys(seenMax).forEach(function(g) { inbox.lastIdBy[g] = Math.max(inbox.lastIdBy[g] || 0, seenMax[g]); });
   return processed;
+}
+
+// ---- 流入経路の大分類(広告・オーガニック・X…)。中間システムが付けた分類を優先し、無ければ経路対応表の案で補う
+var HUB_ROUTE_FALLBACK = {"よしえオンニ用LP_広告計測":"広告|","インセルダム相談会時チラシ用":"広告|","DA【大阪LP】用_広告計測用_流入経路":"広告|","DA【名古屋LP】用_広告計測用_流入経路":"広告|","ドリーム【大阪LP】用_広告計測用":"広告|","ドリーム【名古屋LP】用_広告計測用":"広告|","ひかちわわ様紹介_流入経路":"紹介|","法人パートナー紹介_流入経路":"紹介|","HP_よしえオンニブログ流入経路":"ブログ|","紹介(八幡さん)_流入経路":"紹介|","韓国美容整形ナビnote_流入経路":"note|","梅村X(こうのすけ)":"X|梅村","メインサイト(ナビ本体トップページ)用_広告計測":"オーガニック|","ベリーグッド_広告計測":"広告|","NOTE_広告計測":"広告|","ドリーム_広告計測":"広告|","DA_広告計測_試し用":"広告|","HPプッシュ通知":"オーガニック|","よしえオンニnote_流入経路":"note|","紹介(福井佳代)_流入経路":"紹介|","X(Twitter)Navi梅村":"X|梅村","X(Twitter)Navi櫻井":"X|Navi","X(Twitter)Navi福田":"X|Navi","韓国美容naviサブYouTube_流入経路":"YouTube|韓国美容整形Navi","infonote_流入経路":"note|info","塩崎さん紹介_流入経路":"紹介|","Emma様紹介_流入経路":"X|Emmaさん","広告meta用.ベリーグッド東京":"広告|","GDNベリーグッド東京_流入経路":"広告|","P-MAXベリーグッド東京_流入経路":"広告|","ベリーグッド東京Google広告用LP_流入経路":"広告|","ベリーグッド東京オーガニックLP_流入経路":"オーガニック|","よしえオンニX用(原川)_流入経路":"X|","infoインスタ(皮膚科ストーリー用)":"Instagram|","よしえオンニYouTube用(プロフィール欄)_流入経路":"YouTube|よしえオンニ（原川）","よしえオンニYouTube用(コメント欄)_流入経路":"YouTube|よしえオンニ（原川）","広告用meta用.345(大阪)_流入経路":"広告|","GDN345(大阪)_流入経路":"広告|","P-MAX345(大阪)_流入経路":"広告|","345(大阪)Google広告用LP_流入経路":"広告|","345オーガニックLP(大阪)_流入経路":"オーガニック|","梅村X(DA名古屋大阪202509広告)":"X|梅村","梅村X(グランド202509広告)":"X|梅村","梅村X(NOTE202509広告)":"X|梅村","Instagram(ストーリー用)流入経路":"Instagram|","よしえオンニTikTok用(プロフィール)_流入経路":"TikTok|","よしえオンニInstagram用(プロフィール)_流入経路":"Instagram|よしえオンニ（原川）","現代美学東京オーガニックLP_流入経路":"オーガニック|","広告meta用.現代美学東京_流入経路":"広告|","X(Twitter)病院リツイート用":"X|","村上「おしお」X":"X|おしお","梅村Threads":"Threads|梅村","梅村X":"X|梅村","ドリーム名古屋Google検索広告LP":"広告|","ドリーム福岡オーガニックLP":"オーガニック|","ドリーム福岡GDNLP":"広告|","ドリーム福岡meta広告":"広告|","P-MAX(DR福岡)":"広告|","広告meta用.現代美学大阪_流入経路":"広告|","現代美学大阪GDN_流入経路":"広告|","P-MAX現代美学大阪_流入経路":"広告|","現代美学大阪Google広告用LP_流入経路":"広告|","現代美学大阪オーガニックLP_流入経路":"オーガニック|","000.infoTwitter_流入経路":"X|info","広告meta用.グランド":"広告|","GDNグランド_流入経路":"広告|","P-MAXグランド_流入経路":"広告|","グランドGoogle広告用LP_流入経路":"広告|","現代美学オーガニックLP_流入経路":"オーガニック|","345オーガニックLP_流入経路":"オーガニック|","345Google広告用LP_流入経路":"広告|","P-MAX345_流入経路":"広告|","GDN345_流入経路":"広告|","広告meta用.345":"広告|","広告meta用.ワンダフル":"広告|","広告meta用.ノート":"広告|","GDNワンダフル":"広告|","GDNノート":"広告|","P-MAXワンダフル":"広告|","P-MAXノート":"広告|","ワンダフルGoogle広告用LP":"広告|","ノートGoogle広告用LP":"広告|","ワンダフルオーガニックLP":"オーガニック|","ノートオーガニックLP":"オーガニック|","ドリーム大阪meta広告":"広告|","ドリーム大阪GDNLP":"広告|","ドリーム大阪Google検索LP":"広告|","ドリーム大阪オーガニックLP":"オーガニック|","P-MAX(DR名古屋)":"広告|","P-MAX(DR大阪)":"広告|","Meta広告":"広告|","Googleディスプレイ":"広告|","P-MAX":"広告|","P-MAX(LPキャン以外)":"広告|","Google検索(LPキャン以外)":"広告|","Google検索":"広告|","広告meta用.ブラウン":"広告|","GDNブラウン":"広告|","P-MAXブラウン":"広告|","ブラウンGoogle広告用LP":"広告|","オーガニックLP.ブラウン":"オーガニック|","DA東京(その他)meta広告":"広告|","DA東京(その他)GDN":"広告|","DA東京(その他)P-MAX":"広告|","DA東京(その他)Google広告":"広告|","DA東京(その他)オーガニック":"オーガニック|","DA大阪LPオーガニックその他":"オーガニック|","DA名古屋LPオーガニックその他":"オーガニック|","広告meta用.DA(大阪)その他":"広告|","広告meta用.DA(名古屋)その他":"広告|","P-MAXDA大阪その他":"広告|","P-MAXDA名古屋その他":"広告|","GDNDA大阪その他":"広告|","GDNDA名古屋その他":"広告|","101.広告用LPDA(大阪)その他":"広告|","広告用LPDA(名古屋)その他":"広告|","57長谷川先生LPオーガニック":"オーガニック|","ドリーム名古屋meta広告":"広告|","ドリーム名古屋GDNLP":"広告|","ドリーム名古屋Google検索LP":"広告|","ドリーム名古屋オーガニックLP":"オーガニック|","103.広告用LPDA(福岡)":"広告|","102.広告用LPDA(名古屋)":"広告|","101.広告用LPDA(大阪)":"広告|","84.GDNドリーム":"広告|","83.GDNDA福岡":"広告|","82.GDNDA名古屋":"広告|","81.GDNDA大阪":"広告|","80.GDNDA東京":"広告|","64.P-MAXドリーム":"広告|","63.P-MAXDA福岡":"広告|","62.P-MAXDA名古屋":"広告|","61.P-MAXDA大阪":"広告|","60.P-MAXDA東京":"広告|","73.広告meta用.DA(福岡)":"広告|","72.広告meta用.DA(名古屋)":"広告|","71.広告meta用.DA(大阪)":"広告|","54.DA福岡LPオーガニック":"オーガニック|","53.DA名古屋LPオーガニック":"オーガニック|","52.DA大阪LPオーガニック":"オーガニック|","000.infoインスタ(ストーリー用)":"Instagram|","14.福岡地下鉄駅広告":"広告|","223.大阪地下鉄駅広告":"広告|","1.Instagram":"Instagram|","11.韓国美容整形naviYouTube(松永)":"YouTube|韓国美容整形Navi","30.Heaven":"オーガニック|","20.名刺福田":"紹介|","50.HP":"オーガニック|","100.DA広告用LPDA(東京)":"広告|","104.ドリーム広告用LPページ":"広告|","105.広告用LPNANA":"広告|","106.広告用LPマーブル":"広告|","10.X(Twitter)":"X|","4.tiktok":"TikTok|","54.コラム":"オーガニック|","70.広告meta用.DA":"広告|","74.広告meta用.ドリーム":"広告|","02.名刺梅村_流入経路":"紹介|","222.栄駅地下鉄看板":"広告|","221.地下鉄18駅看板ジャック":"広告|","220.札幌駅広告":"広告|","14.オーガニックLP.DA":"オーガニック|","15.オーガニックLP.ドリーム":"オーガニック|","200.Heaven動画":"オーガニック|","17.オーガニックLPグランド":"オーガニック|","210.チラシ用(2025.9月)":"広告|","〇〇様紹介_流入経路":"紹介|","マーブルLPフォーム_追従バナー":"オーガニック|","マーブルLPフォーム_下部バナー":"オーガニック|","マーブルLPフォーム_真ん中バナー":"オーガニック|"};
+var HUB_CHANNEL_ORDER = ['広告', 'オーガニック', '紹介', 'スタッフ紹介', 'X', 'YouTube', 'TikTok', 'note', 'Instagram', 'Threads', 'ブログ'];
+
+function hubRouteKey(raw) {
+  return String(raw).normalize('NFKC').replace(/\s+/g, '').trim();
+}
+
+function hubChannelOf(inbox, raw) {
+  var c = inbox.chan && inbox.chan[raw];
+  if (c && c[0]) return c[0];
+  var k = hubRouteKey(raw), v = HUB_ROUTE_FALLBACK[k];
+  if (v === undefined) {
+    var stripped = k.replace(/_?流入経路(\(.+?\))?$/, '');
+    v = HUB_ROUTE_FALLBACK[stripped];
+    if (v === undefined) v = HUB_ROUTE_FALLBACK[stripped + '_流入経路'];
+  }
+  return v ? v.split('|')[0] : '未入力';
+}
+
+// 表の集計。year: '2026'、month: '' または '01'〜'12'、channel: '' または大分類
+function hubTrendCompute(inbox, year, month, channel) {
+  var inSel = function(ym) { return ym.slice(0, 4) === year && (!month || ym.slice(5, 7) === month); };
+  var rowsBy = {};   // key(大分類 または 経路名) -> {reg, vis, con}
+  var keyOf = function(raw) {
+    var ch = hubChannelOf(inbox, raw);
+    if (channel && ch !== channel) return null;
+    return channel ? raw : ch;
+  };
+  var get = function(k) { return rowsBy[k] || (rowsBy[k] = { reg: 0, vis: 0, con: 0 }); };
+  Object.keys(inbox.counts).forEach(function(raw) {
+    var k = keyOf(raw);
+    if (k === null) return;
+    Object.keys(inbox.counts[raw]).forEach(function(p) {
+      if (inSel(p.slice(0, 7))) get(k).reg += inbox.counts[raw][p];
+    });
+  });
+  var routeOfUid = function(h) {
+    var t = (inbox.first && inbox.first[h]) || (inbox.rt && inbox.rt[h]);
+    return t ? inbox.raws[t[1]] : null;
+  };
+  [['vis', 'vis'], ['con', 'con']].forEach(function(pair) {
+    var store = inbox[pair[0]] || {};
+    Object.keys(store).forEach(function(h) {
+      if (!inSel(store[h].slice(0, 7))) return;
+      var raw = routeOfUid(h);
+      var k = raw === null ? (channel ? null : '未入力') : keyOf(raw);
+      if (k === null) return;
+      get(k)[pair[1]]++;
+    });
+  });
+  var rows = Object.keys(rowsBy).map(function(k) { return { name: k, reg: rowsBy[k].reg, vis: rowsBy[k].vis, con: rowsBy[k].con }; });
+  rows = rows.filter(function(r) { return r.reg || r.vis || r.con; });
+  var ord = function(n) { var i = HUB_CHANNEL_ORDER.indexOf(n); return n === '未入力' ? 1000 : (i < 0 ? 500 : i); };
+  rows.sort(channel ? function(a, b) { return b.reg - a.reg; } : function(a, b) { return ord(a.name) - ord(b.name) || b.reg - a.reg; });
+  var total = rows.reduce(function(a, r) { return { reg: a.reg + r.reg, vis: a.vis + r.vis, con: a.con + r.con }; }, { reg: 0, vis: 0, con: 0 });
+  return { rows: rows, total: total };
+}
+
+// 月別(1年分)・大分類別・段階別の積み上げ用データ
+function hubTrendMonthly(inbox, year, stage) {
+  var out = {};
+  var add = function(ch, mi, n) { var a = out[ch] || (out[ch] = new Array(12).fill(0)); a[mi] += n; };
+  if (stage === 'reg') {
+    Object.keys(inbox.counts).forEach(function(raw) {
+      Object.keys(inbox.counts[raw]).forEach(function(p) {
+        if (p.slice(0, 4) === year) add(hubChannelOf(inbox, raw), parseInt(p.slice(5, 7), 10) - 1, inbox.counts[raw][p]);
+      });
+    });
+  } else {
+    var store = inbox[stage] || {};
+    Object.keys(store).forEach(function(h) {
+      if (store[h].slice(0, 4) !== year) return;
+      var t = (inbox.first && inbox.first[h]) || (inbox.rt && inbox.rt[h]);
+      add(t ? hubChannelOf(inbox, inbox.raws[t[1]]) : '未入力', parseInt(store[h].slice(5, 7), 10) - 1, 1);
+    });
+  }
+  return out;
 }
 
 function hubTargets() {
@@ -2201,6 +2306,100 @@ function hubApplyToSnapshots() {
   renderHubTab();
 }
 
+
+// ---- 流入経路別 推移表(LINE登録 → 来場 → 成約)
+var hubTrend = { year: null, month: '', channel: '', stage: 'reg' };
+var hubChart = null;
+var HUB_STAGE_NAMES = { reg: 'LINE登録', vis: '来場', con: '成約' };
+var HUB_COLORS = ['#2f7f9b', '#d98a22', '#8a6fb0', '#c24d3a', '#4f86c6', '#5aa469', '#b0903a', '#d06b94', '#7a8794', '#3d5a80', '#9aa84a'];
+
+function hubSetTrend(k, v) {
+  hubTrend[k] = v;
+  hubDrawTrend();
+}
+
+function hubTrendYears() {
+  var ys = {};
+  Object.keys(hubInbox.counts).forEach(function(raw) { Object.keys(hubInbox.counts[raw]).forEach(function(p) { ys[p.slice(0, 4)] = true; }); });
+  ['vis', 'con'].forEach(function(k) { var st = hubInbox[k] || {}; Object.keys(st).forEach(function(h) { ys[st[h].slice(0, 4)] = true; }); });
+  return Object.keys(ys).sort().reverse();
+}
+
+function hubDrawTrend() {
+  var box = document.getElementById('hubTrendBox');
+  if (!box) return;
+  if (hubChart) { try { hubChart.destroy(); } catch (e) {} hubChart = null; }
+  var years = hubTrendYears();
+  if (!years.length) {
+    box.innerHTML = '<p class="empty">まだ取り込んだ記録がありません。下の「② 取り込み」で「取り込む」を押してください。</p>';
+    return;
+  }
+  if (!hubTrend.year || years.indexOf(hubTrend.year) < 0) hubTrend.year = years[0];
+  var hasVis = Object.keys(hubInbox.vis || {}).length > 0, hasCon = Object.keys(hubInbox.con || {}).length > 0;
+  if ((hubTrend.stage === 'vis' && !hasVis) || (hubTrend.stage === 'con' && !hasCon)) hubTrend.stage = 'reg';
+  var r = hubTrendCompute(hubInbox, hubTrend.year, hubTrend.month, hubTrend.channel);
+  var channelsAll = {};
+  Object.keys(hubInbox.counts).forEach(function(raw) { channelsAll[hubChannelOf(hubInbox, raw)] = true; });
+  var chList = Object.keys(channelsAll).sort(function(a, b) {
+    var ia = HUB_CHANNEL_ORDER.indexOf(a), ib = HUB_CHANNEL_ORDER.indexOf(b);
+    if (a === '未入力') return 1; if (b === '未入力') return -1;
+    return (ia < 0 ? 500 : ia) - (ib < 0 ? 500 : ib);
+  });
+  var opt = function(v, label, cur) { return '<option value="' + esc(v) + '"' + (v === cur ? ' selected' : '') + '>' + esc(label) + '</option>'; };
+  var months = '<option value=""' + (hubTrend.month === '' ? ' selected' : '') + '>ぜんぶの月</option>';
+  for (var mi = 1; mi <= 12; mi++) { var mm = (mi < 10 ? '0' : '') + mi; months += opt(mm, mi + '月', hubTrend.month); }
+  var stageOpts = opt('reg', 'LINE登録', hubTrend.stage) + (hasVis ? opt('vis', '来場', hubTrend.stage) : '') + (hasCon ? opt('con', '成約', hubTrend.stage) : '');
+  var sel = function(k) { return 'onchange="hubSetTrend(\'' + k + '\', this.value)"'; };
+  var controls = '<div class="hub-row" style="gap:16px">' +
+    '<div><label style="display:block">年</label><select class="year-select rank-select" ' + sel('year') + '>' + years.map(function(y) { return opt(y, y + '年', hubTrend.year); }).join('') + '</select></div>' +
+    '<div><label style="display:block">月</label><select class="year-select rank-select" ' + sel('month') + '>' + months + '</select></div>' +
+    '<div><label style="display:block">流入経路</label><select class="year-select rank-select" ' + sel('channel') + '>' + opt('', 'ぜんぶの流入経路', hubTrend.channel) + chList.map(function(c) { return opt(c, c, hubTrend.channel); }).join('') + '</select></div>' +
+    '<div><label style="display:block">グラフにする段階</label><select class="year-select rank-select" ' + sel('stage') + '>' + stageOpts + '</select></div></div>' +
+    '<p class="hub-sub" style="margin:-2px 0 10px">' + (hubTrend.channel ? '「' + esc(hubTrend.channel) + '」の内訳（Lステップの流入経路名ごと）を表示しています。' : '流入経路を1つ選ぶと、その内訳まで見られます。') + '</p>';
+
+  var T = r.total;
+  var pct = function(a, b) { return b ? (Math.round(a / b * 1000) / 10) + '%' : '-'; };
+  var kpi = function(n, label, sub) { return '<div class="kpi-card"><div class="val">' + n.toLocaleString('ja-JP') + '</div><div class="label">' + label + '</div><div class="label" style="color:#2f7f9b">' + sub + '</div></div>'; };
+  var dash = '<span style="color:#b0bdcc">—</span>';
+  var kpis = '<div class="hub-kpis">' + kpi(T.reg, 'LINE登録', 'いちばん入口') +
+    (hasVis ? kpi(T.vis, '来場', 'ひとつ前から ' + pct(T.vis, T.reg)) : '') +
+    (hasCon ? kpi(T.con, '成約', 'ひとつ前から ' + pct(T.con, T.vis)) : '') + '</div>';
+  var cell = function(has, n) { return has ? n.toLocaleString('ja-JP') : dash; };
+  var body = r.rows.map(function(x) {
+    return '<tr><td class="l">' + esc(x.name) + '</td><td>' + x.reg.toLocaleString('ja-JP') + '</td><td>' + cell(hasVis, x.vis) + '</td><td>' + cell(hasCon, x.con) + '</td>' +
+      '<td>' + (hasVis ? pct(x.vis, x.reg) : dash) + '</td><td>' + (hasVis && hasCon ? pct(x.con, x.vis) : dash) + '</td></tr>';
+  }).join('');
+  var table = '<div style="overflow-x:auto"><table class="hub-table"><thead><tr><th class="l">流入経路</th><th>LINE登録</th><th>来場</th><th>成約</th><th>LINE登録→来場</th><th>来場→成約</th></tr></thead><tbody>' + body +
+    '<tr style="font-weight:700;background:#f4f8fc"><td class="l">合計</td><td>' + T.reg.toLocaleString('ja-JP') + '</td><td>' + cell(hasVis, T.vis) + '</td><td>' + cell(hasCon, T.con) + '</td><td>' + (hasVis ? pct(T.vis, T.reg) : dash) + '</td><td>' + (hasVis && hasCon ? pct(T.con, T.vis) : dash) + '</td></tr></tbody></table></div>';
+  var note = (hasVis && hasCon) ? '' : '<p class="hub-sub" style="margin-top:8px">来場・成約は、中間システムの「末端表」で、この末端の許可グループに「来場」「成約確定」を足して取り込むと、ここに出ます。</p>';
+  var totalFriends = Object.keys(hubInbox.counts).reduce(function(a, raw) { return a + Object.keys(hubInbox.counts[raw]).reduce(function(b, p) { return b + hubInbox.counts[raw][p]; }, 0); }, 0);
+  box.innerHTML = '<p class="hub-sub">友だち ' + totalFriends.toLocaleString('ja-JP') + '人ぶん（データの時点 ' + esc(hubInbox.asOf || '-') + '）。数え方は、「初回の流入経路」で1人を1回です。</p>' +
+    controls + kpis + table + note +
+    '<div style="margin-top:14px"><canvas id="hubTrendChart" height="90"></canvas></div>';
+
+  var monthly = hubTrendMonthly(hubInbox, hubTrend.year, hubTrend.stage);
+  var names = Object.keys(monthly).sort(function(a, b) {
+    var ia = HUB_CHANNEL_ORDER.indexOf(a), ib = HUB_CHANNEL_ORDER.indexOf(b);
+    if (a === '未入力') return 1; if (b === '未入力') return -1;
+    return (ia < 0 ? 500 : ia) - (ib < 0 ? 500 : ib);
+  });
+  var cv = document.getElementById('hubTrendChart');
+  if (cv && typeof Chart !== 'undefined' && names.length) {
+    hubChart = new Chart(cv, {
+      type: 'bar',
+      data: {
+        labels: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'],
+        datasets: names.map(function(n, i) { return { label: n, data: monthly[n], backgroundColor: HUB_COLORS[i % HUB_COLORS.length], stack: 's' }; })
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { position: 'bottom' }, title: { display: true, text: hubTrend.year + '年 ' + HUB_STAGE_NAMES[hubTrend.stage] + '（月別・流入経路別）' } },
+        scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }
+      }
+    });
+  }
+}
+
 function renderHubTab(keepScroll) {
   var area = document.getElementById('hubArea');
   if (!area) return;
@@ -2287,8 +2486,10 @@ function renderHubTab(keepScroll) {
       '<span style="font-size:0.8em;color:#7c8ca0">まだ終わっていない期間（途中）は反映しません。</span></div></div>';
   }
 
+  var trendCard = '<div class="hub-card"><h3>流入経路別 推移表（LINE）</h3><div id="hubTrendBox"></div></div>';
   var scrollY = window.scrollY;
-  area.innerHTML = '<div class="rank-header" style="margin-bottom:12px"><h2 class="rank-h2">🔌 Lステップ連携（受け口）</h2></div>' + kpis + connHtml + syncHtml + mapHtml + cmpHtml;
+  area.innerHTML = '<div class="rank-header" style="margin-bottom:12px"><h2 class="rank-h2">🔌 Lステップ連携（受け口）</h2></div>' + kpis + trendCard + connHtml + syncHtml + mapHtml + cmpHtml;
+  hubDrawTrend();
   if (keepScroll) window.scrollTo(0, scrollY);
 }
 

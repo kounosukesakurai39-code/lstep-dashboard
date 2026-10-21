@@ -2400,6 +2400,125 @@ function hubDrawTrend() {
   }
 }
 
+
+// ---- 日別 推移表(日付ごと)
+var hubDay = { year: null, month: null, stage: 'reg', channel: '' };
+
+function hubSetDay(k, v) {
+  hubDay[k] = v;
+  if (k === 'year') hubDay.month = null;
+  hubDrawDaily();
+}
+
+// 友だち1人ごとの「初回の流入経路」の日付と経路
+function hubUidRoute(inbox, h) {
+  var t = (inbox.first && inbox.first[h]) || (inbox.rt && inbox.rt[h]);
+  return t ? { date: t[0], raw: inbox.raws[t[1]] } : null;
+}
+
+// 指定した年月の、日ごとの人数。列は、大分類(流入経路を選んだときは、その内訳の経路名)
+function hubDailyCompute(inbox, ym, stage, channel) {
+  var days = {}, colTotals = {};
+  var put = function(date, raw) {
+    if (date.slice(0, 7) !== ym) return;
+    var ch = raw === null ? '未入力' : hubChannelOf(inbox, raw);
+    if (channel && ch !== channel) return;
+    var col = channel ? raw : ch;
+    var d = days[date] || (days[date] = { total: 0, by: {} });
+    d.total++; d.by[col] = (d.by[col] || 0) + 1;
+    colTotals[col] = (colTotals[col] || 0) + 1;
+  };
+  if (stage === 'reg') {
+    ['first', 'rt'].forEach(function(k) {
+      var st = inbox[k] || {};
+      Object.keys(st).forEach(function(h) { put(st[h][0], inbox.raws[st[h][1]]); });
+    });
+  } else {
+    var store = inbox[stage] || {};
+    Object.keys(store).forEach(function(h) {
+      var r = hubUidRoute(inbox, h);
+      put(store[h], r ? r.raw : null);
+    });
+  }
+  var ord = function(n) { var i = HUB_CHANNEL_ORDER.indexOf(n); return n === '未入力' ? 1000 : (i < 0 ? 500 : i); };
+  var cols = Object.keys(colTotals).sort(channel ? function(a, b) { return colTotals[b] - colTotals[a]; } : function(a, b) { return ord(a) - ord(b); });
+  return { days: days, cols: cols, colTotals: colTotals };
+}
+
+function hubDrawDaily() {
+  var box = document.getElementById('hubDayBox');
+  if (!box) return;
+  var allDates = [];
+  ['first', 'rt'].forEach(function(k) { var st = hubInbox[k] || {}; Object.keys(st).forEach(function(h) { allDates.push(st[h][0]); }); });
+  ['vis', 'con'].forEach(function(k) { var st = hubInbox[k] || {}; Object.keys(st).forEach(function(h) { allDates.push(st[h]); }); });
+  if (!allDates.length) { box.innerHTML = '<p class="empty">まだ取り込んだ記録がありません。</p>'; return; }
+  allDates.sort();
+  var years = {}, ymsByYear = {};
+  allDates.forEach(function(d) { years[d.slice(0, 4)] = true; (ymsByYear[d.slice(0, 4)] = ymsByYear[d.slice(0, 4)] || {})[d.slice(0, 7)] = true; });
+  var yearList = Object.keys(years).sort().reverse();
+  if (!hubDay.year || !years[hubDay.year]) { hubDay.year = yearList[0]; hubDay.month = null; }
+  var monthsOfYear = Object.keys(ymsByYear[hubDay.year]).sort();
+  if (!hubDay.month || monthsOfYear.indexOf(hubDay.year + '-' + hubDay.month) < 0) hubDay.month = monthsOfYear[monthsOfYear.length - 1].slice(5, 7);
+  var ym = hubDay.year + '-' + hubDay.month;
+  var hasVis = Object.keys(hubInbox.vis || {}).length > 0, hasCon = Object.keys(hubInbox.con || {}).length > 0;
+  if ((hubDay.stage === 'vis' && !hasVis) || (hubDay.stage === 'con' && !hasCon)) hubDay.stage = 'reg';
+
+  var r = hubDailyCompute(hubInbox, ym, hubDay.stage, hubDay.channel);
+  var chSet = {};
+  Object.keys(hubInbox.counts).forEach(function(raw) { chSet[hubChannelOf(hubInbox, raw)] = true; });
+  var chList = Object.keys(chSet).sort(function(a, b) {
+    var ia = HUB_CHANNEL_ORDER.indexOf(a), ib = HUB_CHANNEL_ORDER.indexOf(b);
+    if (a === '未入力') return 1; if (b === '未入力') return -1;
+    return (ia < 0 ? 500 : ia) - (ib < 0 ? 500 : ib);
+  });
+  var opt = function(v, label, cur) { return '<option value="' + esc(v) + '"' + (v === cur ? ' selected' : '') + '>' + esc(label) + '</option>'; };
+  var sel = function(k) { return 'onchange="hubSetDay(\'' + k + '\', this.value)"'; };
+  var mOpts = monthsOfYear.map(function(m) { return opt(m.slice(5, 7), parseInt(m.slice(5, 7), 10) + '月', hubDay.month); }).join('');
+  var controls = '<div class="hub-row" style="gap:16px">' +
+    '<div><label style="display:block">年</label><select class="year-select rank-select" ' + sel('year') + '>' + yearList.map(function(y) { return opt(y, y + '年', hubDay.year); }).join('') + '</select></div>' +
+    '<div><label style="display:block">月</label><select class="year-select rank-select" ' + sel('month') + '>' + mOpts + '</select></div>' +
+    '<div><label style="display:block">数える段階</label><select class="year-select rank-select" ' + sel('stage') + '>' + opt('reg', 'LINE登録', hubDay.stage) + (hasVis ? opt('vis', '来場', hubDay.stage) : '') + (hasCon ? opt('con', '成約', hubDay.stage) : '') + '</select></div>' +
+    '<div><label style="display:block">流入経路</label><select class="year-select rank-select" ' + sel('channel') + '>' + opt('', 'ぜんぶの流入経路', hubDay.channel) + chList.map(function(c) { return opt(c, c, hubDay.channel); }).join('') + '</select></div></div>';
+
+  var y = parseInt(hubDay.year, 10), m = parseInt(hubDay.month, 10), lastDay = new Date(y, m, 0).getDate();
+  var asOfDate = String(hubInbox.asOf || '').slice(0, 10);
+  var wdName = '日月火水木金土';
+  var totals = r.days;
+  var vals = Object.keys(totals).map(function(k) { return totals[k].total; }).filter(function(v) { return v > 0; }).sort(function(a, b) { return a - b; });
+  var median = vals.length ? vals[Math.floor(vals.length / 2)] : 0;
+  var isSpike = function(v) { return v >= 15 && v >= median * 3; };
+  var pad = function(n) { return n < 10 ? '0' + n : '' + n; };
+
+  var head = '<tr><th class="l">日付</th><th>合計</th>' + r.cols.map(function(c) { return '<th>' + esc(c) + '</th>'; }).join('') + '</tr>';
+  var rows = '', weekSum = { total: 0, by: {} }, weekStart = null;
+  var flushWeek = function(endDay) {
+    if (weekStart === null) return;
+    rows += '<tr style="font-weight:700;background:#eef4f9"><td class="l">週計 ' + m + '/' + weekStart + ' 〜 ' + m + '/' + endDay + '</td><td>' + weekSum.total + '</td>' +
+      r.cols.map(function(c) { return '<td>' + (weekSum.by[c] || 0) + '</td>'; }).join('') + '</tr>';
+    weekSum = { total: 0, by: {} }; weekStart = null;
+  };
+  for (var d = 1; d <= lastDay; d++) {
+    var date = ym + '-' + pad(d), wd = new Date(y, m - 1, d).getDay();
+    var future = asOfDate && date > asOfDate;
+    var rec = totals[date] || { total: 0, by: {} };
+    if (weekStart === null) weekStart = d;
+    if (!future) { weekSum.total += rec.total; r.cols.forEach(function(c) { weekSum.by[c] = (weekSum.by[c] || 0) + (rec.by[c] || 0); }); }
+    var color = wd === 0 ? 'color:#c0304a' : (wd === 6 ? 'color:#14548a' : '');
+    var partial = asOfDate && date === asOfDate;
+    var tdv = function(n) { return future ? '<td style="color:#c0c9d4">-</td>' : '<td>' + (n || '<span style="color:#c0c9d4">0</span>') + '</td>'; };
+    rows += '<tr><td class="l" style="' + color + '">' + m + '/' + d + ' <span style="font-size:0.85em">(' + wdName[wd] + ')</span>' + (partial ? ' <span style="color:#b8860b;font-size:0.8em">途中</span>' : '') + '</td>' +
+      (future ? '<td style="color:#c0c9d4">-</td>' : '<td style="font-weight:600;' + (isSpike(rec.total) ? 'background:#fff4d6;color:#8a5a00' : '') + '">' + (rec.total || '<span style="color:#c0c9d4">0</span>') + '</td>') +
+      r.cols.map(function(c) { return tdv(rec.by[c]); }).join('') + '</tr>';
+    if (wd === 0 || d === lastDay) flushWeek(d);
+  }
+  var monthTotal = Object.keys(totals).reduce(function(a, k) { return a + totals[k].total; }, 0);
+  rows += '<tr style="font-weight:700;background:#f4f8fc"><td class="l">' + m + '月 合計</td><td>' + monthTotal + '</td>' +
+    r.cols.map(function(c) { return '<td>' + (r.colTotals[c] || 0) + '</td>'; }).join('') + '</tr>';
+
+  box.innerHTML = '<p class="hub-sub">1人を、初回の流入経路を通った日（来場・成約は、その記録の日）で1回数えます。データは ' + esc(hubInbox.asOf || '-') + ' 時点までです。黄色は、ほかの日より目立って多い日です。</p>' +
+    controls + '<div style="overflow-x:auto"><table class="hub-table"><thead>' + head + '</thead><tbody>' + rows + '</tbody></table></div>';
+}
+
 function renderHubTab(keepScroll) {
   var area = document.getElementById('hubArea');
   if (!area) return;
@@ -2486,10 +2605,12 @@ function renderHubTab(keepScroll) {
       '<span style="font-size:0.8em;color:#7c8ca0">まだ終わっていない期間（途中）は反映しません。</span></div></div>';
   }
 
-  var trendCard = '<div class="hub-card"><h3>流入経路別 推移表（LINE）</h3><div id="hubTrendBox"></div></div>';
+  var trendCard = '<div class="hub-card"><h3>流入経路別 推移表（LINE）</h3><div id="hubTrendBox"></div></div>' +
+    '<div class="hub-card"><h3>日別 推移表（日付ごと）</h3><div id="hubDayBox"></div></div>';
   var scrollY = window.scrollY;
   area.innerHTML = '<div class="rank-header" style="margin-bottom:12px"><h2 class="rank-h2">🔌 Lステップ連携（受け口）</h2></div>' + kpis + trendCard + connHtml + syncHtml + mapHtml + cmpHtml;
   hubDrawTrend();
+  hubDrawDaily();
   if (keepScroll) window.scrollTo(0, scrollY);
 }
 

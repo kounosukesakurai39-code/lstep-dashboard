@@ -2362,7 +2362,14 @@ function hubDetailRow(colspan, title, items) {
     items.map(function(i) { return '<span class="hub-chip">' + esc(i.label) + ' ' + i.n + '人</span>'; }).join('') + '</td></tr>';
 }
 
-var hubTrend = { year: null, month: '', channel: '', stage: 'reg' };
+var hubTrend = { year: null, month: '', channel: '', stage: 'reg', compare: false, year2: null };
+
+function hubToggleCompare() {
+  hubTrend.compare = !hubTrend.compare;
+  hubTrend.year2 = null;
+  hubOpen.trend = null;
+  hubDrawTrend();
+}
 var hubChart = null;
 var HUB_STAGE_NAMES = { reg: 'LINE登録', vis: '来場', con: '成約' };
 var HUB_COLORS = ['#2f7f9b', '#d98a22', '#8a6fb0', '#c24d3a', '#4f86c6', '#5aa469', '#b0903a', '#d06b94', '#7a8794', '#3d5a80', '#9aa84a'];
@@ -2377,6 +2384,77 @@ function hubTrendYears() {
   Object.keys(hubInbox.counts).forEach(function(raw) { Object.keys(hubInbox.counts[raw]).forEach(function(p) { ys[p.slice(0, 4)] = true; }); });
   ['vis', 'con'].forEach(function(k) { var st = hubInbox[k] || {}; Object.keys(st).forEach(function(h) { ys[st[h].slice(0, 4)] = true; }); });
   return Object.keys(ys).sort().reverse();
+}
+
+// ---- 年と年の比べ(流入経路別 推移表)
+function hubDrawCompare(box, controls, hasVis, hasCon) {
+  var y1 = hubTrend.year, y2 = hubTrend.year2;
+  if (y1 === y2) {
+    box.innerHTML = controls + '<p class="empty">「年」と「比べる年」が同じです。違う年を選んでください。</p>';
+    return;
+  }
+  var yA = y1 < y2 ? y1 : y2, yB = y1 < y2 ? y2 : y1;   // 古い年を左、新しい年を右
+  var ra = hubTrendCompute(hubInbox, yA, hubTrend.month, hubTrend.channel);
+  var rb = hubTrendCompute(hubInbox, yB, hubTrend.month, hubTrend.channel);
+  var by = {};
+  ra.rows.forEach(function(x) { (by[x.name] = by[x.name] || { name: x.name, a: {}, b: {} }).a = x; });
+  rb.rows.forEach(function(x) { (by[x.name] = by[x.name] || { name: x.name, a: {}, b: {} }).b = x; });
+  var rows = Object.keys(by).map(function(k) { return by[k]; });
+  var ord = function(n) { var i = HUB_CHANNEL_ORDER.indexOf(n); return n === '未入力' ? 1000 : (i < 0 ? 500 : i); };
+  rows.sort(hubTrend.channel
+    ? function(a, b) { return ((b.a.reg || 0) + (b.b.reg || 0)) - ((a.a.reg || 0) + (a.b.reg || 0)); }
+    : function(a, b) { return ord(a.name) - ord(b.name); });
+  var stages = [['reg', 'LINE登録']].concat(hasVis ? [['vis', '来場']] : []).concat(hasCon ? [['con', '成約']] : []);
+  var diffCell = function(av, bv) {
+    var d = bv - av;
+    if (!av && !bv) return '<td style="color:#b0bdcc">-</td>';
+    var color = d > 0 ? '#1f8a4c' : (d < 0 ? '#b3263e' : '#7c8ca0');
+    var pctTxt = av ? ' (' + (d >= 0 ? '+' : '') + (Math.round(d / av * 1000) / 10) + '%)' : ' (新規)';
+    return '<td style="color:' + color + ';font-weight:600">' + (d > 0 ? '+' : '') + d.toLocaleString('ja-JP') + '<span style="font-weight:400;font-size:0.88em">' + pctTxt + '</span></td>';
+  };
+  var row = function(label, a, b, bold) {
+    var cells = stages.map(function(st) {
+      var av = a[st[0]] || 0, bv = b[st[0]] || 0;
+      return '<td>' + av.toLocaleString('ja-JP') + '</td><td>' + bv.toLocaleString('ja-JP') + '</td>' + diffCell(av, bv);
+    }).join('');
+    return '<tr' + (bold ? ' style="font-weight:700;background:#f4f8fc"' : '') + '><td class="l">' + esc(label) + '</td>' + cells + '</tr>';
+  };
+  var body = rows.map(function(x) { return row(x.name, x.a, x.b, false); }).join('');
+  var head1 = '<tr><th class="l" rowspan="2">流入経路</th>' + stages.map(function(st) { return '<th colspan="3">' + st[1] + '</th>'; }).join('') + '</tr>';
+  var head2 = '<tr>' + stages.map(function() { return '<th>' + yA + '年</th><th>' + yB + '年</th><th>増減（' + yB + '−' + yA + '）</th>'; }).join('') + '</tr>';
+  var table = '<div style="overflow-x:auto"><table class="hub-table"><thead>' + head1 + head2 + '</thead><tbody>' + body + row('合計', ra.total, rb.total, true) + '</tbody></table></div>';
+  var scope = (hubTrend.month ? parseInt(hubTrend.month, 10) + '月だけを' : 'ぜんぶの月を') + '比べています' + (hubTrend.channel ? '（「' + hubTrend.channel + '」の内訳）' : '') + '。';
+  var note = (hasVis && hasCon) ? '' : '<p class="hub-sub" style="margin-top:8px">来場・成約は、まだ受け取っていないため、ここには出ません。</p>';
+
+  box.innerHTML = '<p class="hub-sub">' + scope + 'タップで内訳を見る機能は、比べているときは使えません。</p>' + controls + table + note +
+    '<div style="margin-top:14px"><canvas id="hubTrendChart" height="90"></canvas></div>';
+
+  var monthlyOf = function(year) {
+    var m = hubTrendMonthly(hubInbox, year, hubTrend.stage), tot = new Array(12).fill(0);
+    Object.keys(m).forEach(function(ch) {
+      if (hubTrend.channel && ch !== hubTrend.channel) return;
+      m[ch].forEach(function(v, i) { tot[i] += v; });
+    });
+    return tot;
+  };
+  var cv = document.getElementById('hubTrendChart');
+  if (cv && typeof Chart !== 'undefined') {
+    hubChart = new Chart(cv, {
+      type: 'bar',
+      data: {
+        labels: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'],
+        datasets: [
+          { label: yA + '年', data: monthlyOf(yA), backgroundColor: '#b9c6d4' },
+          { label: yB + '年', data: monthlyOf(yB), backgroundColor: '#2f7f9b' }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { position: 'bottom' }, title: { display: true, text: yA + '年と' + yB + '年の ' + HUB_STAGE_NAMES[hubTrend.stage] + '（月別' + (hubTrend.channel ? '・' + hubTrend.channel : '') + '）' } },
+        scales: { y: { beginAtZero: true } }
+      }
+    });
+  }
 }
 
 function hubDrawTrend() {
@@ -2399,6 +2477,10 @@ function hubDrawTrend() {
     if (a === '未入力') return 1; if (b === '未入力') return -1;
     return (ia < 0 ? 500 : ia) - (ib < 0 ? 500 : ib);
   });
+  if (hubTrend.compare && (!hubTrend.year2 || years.indexOf(hubTrend.year2) < 0)) {
+    var prevY = String(parseInt(hubTrend.year, 10) - 1);
+    hubTrend.year2 = years.indexOf(prevY) >= 0 ? prevY : (years.filter(function(y) { return y !== hubTrend.year; })[0] || hubTrend.year);
+  }
   var opt = function(v, label, cur) { return '<option value="' + esc(v) + '"' + (v === cur ? ' selected' : '') + '>' + esc(label) + '</option>'; };
   var months = '<option value=""' + (hubTrend.month === '' ? ' selected' : '') + '>ぜんぶの月</option>';
   for (var mi = 1; mi <= 12; mi++) { var mm = (mi < 10 ? '0' : '') + mi; months += opt(mm, mi + '月', hubTrend.month); }
@@ -2408,8 +2490,12 @@ function hubDrawTrend() {
     '<div><label style="display:block">年</label><select class="year-select rank-select" ' + sel('year') + '>' + years.map(function(y) { return opt(y, y + '年', hubTrend.year); }).join('') + '</select></div>' +
     '<div><label style="display:block">月</label><select class="year-select rank-select" ' + sel('month') + '>' + months + '</select></div>' +
     '<div><label style="display:block">流入経路</label><select class="year-select rank-select" ' + sel('channel') + '>' + opt('', 'ぜんぶの流入経路', hubTrend.channel) + chList.map(function(c) { return opt(c, c, hubTrend.channel); }).join('') + '</select></div>' +
-    '<div><label style="display:block">グラフにする段階</label><select class="year-select rank-select" ' + sel('stage') + '>' + stageOpts + '</select></div></div>' +
+    '<div><label style="display:block">グラフにする段階</label><select class="year-select rank-select" ' + sel('stage') + '>' + stageOpts + '</select></div>' +
+    (hubTrend.compare ? '<div><label style="display:block">比べる年</label><select class="year-select rank-select" ' + sel('year2') + '>' + years.map(function(y) { return opt(y, y + '年', hubTrend.year2); }).join('') + '</select></div>' : '') +
+    '<div><label style="display:block">&nbsp;</label><button class="btn gray" onclick="hubToggleCompare()">' + (hubTrend.compare ? '✕ 比べるをやめる' : '⇄ 年を比べる') + '</button></div></div>' +
     '<p class="hub-sub" style="margin:-2px 0 10px">' + (hubTrend.channel ? '「' + esc(hubTrend.channel) + '」の内訳（Lステップの流入経路名ごと）を表示しています。' : '流入経路を1つ選ぶと、その内訳まで見られます。') + '</p>';
+
+  if (hubTrend.compare) { hubDrawCompare(box, controls, hasVis, hasCon); return; }
 
   var T = r.total;
   var pct = function(a, b) { return b ? (Math.round(a / b * 1000) / 10) + '%' : '-'; };

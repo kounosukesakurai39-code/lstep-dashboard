@@ -254,6 +254,12 @@
   .hub-diff { color: #b3263e; font-weight: 700; }
   .hub-same { color: #1f8a4c; }
   .hub-guess { font-size: 0.75em; color: #b8860b; margin-left: 6px; }
+  .hub-scroll { overflow: auto; max-height: calc(100vh - 210px); min-height: 200px; }
+  .hub-scroll .hub-table { overflow: visible; border-radius: 0; border: none; }
+  .hub-scroll .hub-table thead th { position: sticky; top: 0; z-index: 3; box-shadow: 0 1px 0 #e5eaf0; }
+  .hub-scroll .hub-table tbody tr { background: #fff; }
+  .hub-scroll .hub-table td.l:first-child, .hub-scroll .hub-table th.l:first-child { position: sticky; left: 0; z-index: 1; background: inherit; }
+  .hub-scroll .hub-table thead th.l:first-child { z-index: 4; background: #fafbfd; }
   .hub-click { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
   .hub-click:hover { background: #eef4f9; }
   .hub-detail td { background: #f8fbfe; text-align: left !important; white-space: normal !important; padding: 10px 14px !important; font-size: 0.92em; color: #45566b; }
@@ -2595,7 +2601,7 @@ function hubDrawDaily() {
     r.cols.map(function(c) { return '<td>' + (r.colTotals[c] || 0) + '</td>'; }).join('') + '</tr>';
 
   box.innerHTML = '<p class="hub-sub">1人を、初回の流入経路を通った日（来場・成約は、その記録の日）で1回数えます。データは ' + esc(hubInbox.asOf || '-') + ' 時点までです。黄色は、ほかの日より目立って多い日です。</p>' +
-    controls + '<div style="overflow-x:auto"><table class="hub-table"><thead>' + head + '</thead><tbody>' + rows + '</tbody></table></div>';
+    controls + '<div class="hub-scroll"><table class="hub-table"><thead>' + head + '</thead><tbody>' + rows + '</tbody></table></div>';
 }
 
 function renderHubTab(keepScroll) {

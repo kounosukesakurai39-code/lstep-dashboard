@@ -1,0 +1,27 @@
+name: lstep-sync
+
+# 毎朝5時(日本時間)ごろ、Lステップ中間システムから受け取って、受け口を最新にする。
+# GitHub の都合で、数分〜1時間ほど遅れることがある。手動で動かすときは、Actions の「Run workflow」。
+on:
+  schedule:
+    - cron: '0 20 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: lstep-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: 受け口に取り込む
+        run: node scripts/lstep-sync.mjs
+        env:
+          HUB_URL: ${{ secrets.HUB_URL }}
+          HUB_KEY: ${{ secrets.HUB_KEY }}

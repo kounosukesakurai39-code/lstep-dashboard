@@ -2629,8 +2629,12 @@ function renderHubTab(keepScroll) {
     '<div class="hub-row"><button class="btn" onclick="hubSaveConn()">保存</button>' +
     '<button class="btn gray" onclick="hubTest()"' + (hubBusy ? ' disabled' : '') + '>接続テスト</button></div></div>';
 
+  var la = hubInbox.lastAuto;
+  var autoLine = la
+    ? '自動取り込み（毎朝5時ごろ）: ' + (la.ok ? '成功' : '<b style="color:#b3263e">失敗</b>（' + esc(la.error || '') + '）') + ' ／ ' + esc(new Date(la.at).toLocaleString('ja-JP'))
+    : '自動取り込み（毎朝5時ごろ、GitHubが実行）: まだ動いていません。';
   var syncHtml = '<div class="hub-card"><h3>② 取り込み</h3>' +
-    '<p class="hub-sub">中間システムから記録を受け取り、保存できてから「受け取れた」を返します（途中で止まっても、続きから再開できます）。人数だけを集計して保存し、友だちIDそのものは保存しません。</p>' +
+    '<p class="hub-sub">中間システムから記録を受け取り、保存できてから「受け取れた」を返します（途中で止まっても、続きから再開できます）。人数だけを集計して保存し、友だちIDそのものは保存しません。<br>' + autoLine + '</p>' +
     '<div class="hub-row"><button class="btn green" onclick="hubSync()"' + ((hubBusy || !connected) ? ' disabled' : '') + '>🔄 取り込む</button>' +
     (connected ? '' : '<span style="font-size:0.82em;color:#b3263e">先に①で接続を保存してください</span>') + '</div>' +
     (hubMsg ? '<div class="hub-msg' + (hubMsgErr ? ' err' : '') + '">' + esc(hubMsg) + '</div>' : '') + '</div>';

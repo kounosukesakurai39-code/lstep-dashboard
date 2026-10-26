@@ -364,7 +364,7 @@
     <button class="tab" id="tabbtn-snapshot" onclick="showTab('snapshot')">📅 月次集計</button>
     <button class="tab" id="tabbtn-ranking" onclick="showTab('ranking')">📊 ダッシュボード</button>
     <button class="tab" id="tabbtn-managers" onclick="showTab('managers')">👤 インセンティブ表</button>
-    <button class="tab" id="tabbtn-hub" onclick="showTab('hub')">🔌 Lステップ連携</button>
+    <button class="tab" id="tabbtn-hub" onclick="showTab('hub')">🔌 Lステップ表</button>
     <button class="tab" id="tabbtn-settings" onclick="showTab('settings')">⚙️ 設定</button>
   </div>
 </nav>
@@ -2808,7 +2808,7 @@ function renderHubTab(keepScroll) {
   var trendCard = '<div class="hub-card"><h3>流入経路別 推移表（LINE）</h3><div id="hubTrendBox"></div></div>' +
     '<div class="hub-card"><h3>日別 推移表（日付ごと）</h3><div id="hubDayBox"></div></div>';
   var scrollY = window.scrollY;
-  area.innerHTML = '<div class="rank-header" style="margin-bottom:12px"><h2 class="rank-h2">🔌 Lステップ連携（受け口）</h2></div>' + kpis + trendCard + connHtml + syncHtml + mapHtml + cmpHtml;
+  area.innerHTML = '<div class="rank-header" style="margin-bottom:12px"><h2 class="rank-h2">🔌 Lステップ表</h2></div>' + kpis + trendCard + connHtml + syncHtml + mapHtml + cmpHtml;
   hubDrawTrend();
   hubDrawDaily();
   if (keepScroll) window.scrollTo(0, scrollY);

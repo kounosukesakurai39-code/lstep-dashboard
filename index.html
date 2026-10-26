@@ -2647,8 +2647,7 @@ function hubDrawDaily() {
   var pad = function(n) { return n < 10 ? '0' + n : '' + n; };
 
   var head = '<tr><th class="l">日付</th><th>合計</th>' + r.cols.map(function(c) { return '<th>' + esc(c) + '</th>'; }).join('') + '</tr>';
-  var rows = '', weekSum = { total: 0, by: {} }, weekStart = null;
-  // 週計・月合計の行。数字をタップすると、その期間の内訳が出る
+  // 新しい日が上。週計・月合計は、その期間の見出しとして、いちばん上に置く
   var drillAll = !hubDay.channel;
   var escK = function(k) { return k.replace(/\\/g, '\\\\').replace(/'/g, "\\'"); };
   var rangeRow = function(label, from, to, sum, bg) {
@@ -2666,43 +2665,53 @@ function hubDrawDaily() {
     }
     return html;
   };
-  var flushWeek = function(endDay) {
-    if (weekStart === null) return;
-    rows += rangeRow('週計 ' + m + '/' + weekStart + ' 〜 ' + m + '/' + endDay, ym + '-' + pad(weekStart), ym + '-' + pad(endDay), weekSum, '#eef4f9');
-    weekSum = { total: 0, by: {} }; weekStart = null;
-  };
-  for (var d = 1; d <= lastDay; d++) {
+
+  // データのある日(取り込み済みの時点)まで表示する。それより先の日は出さない
+  var shownLast = lastDay;
+  if (asOfDate) {
+    if (ym > asOfDate.slice(0, 7)) shownLast = 0;
+    else if (ym === asOfDate.slice(0, 7)) shownLast = Math.min(lastDay, parseInt(asOfDate.slice(8, 10), 10));
+  }
+  var weeks = [], cur = null;
+  for (var d = 1; d <= shownLast; d++) {
     var date = ym + '-' + pad(d), wd = new Date(y, m - 1, d).getDay();
-    var future = asOfDate && date > asOfDate;
     var rec = totals[date] || { total: 0, by: {} };
-    if (weekStart === null) weekStart = d;
-    if (!future) { weekSum.total += rec.total; r.cols.forEach(function(c) { weekSum.by[c] = (weekSum.by[c] || 0) + (rec.by[c] || 0); }); }
+    if (!cur) cur = { start: d, sum: { total: 0, by: {} }, days: [] };
+    cur.sum.total += rec.total; r.cols.forEach(function(c) { cur.sum.by[c] = (cur.sum.by[c] || 0) + (rec.by[c] || 0); });
     var color = wd === 0 ? 'color:#c0304a' : (wd === 6 ? 'color:#14548a' : '');
     var partial = asOfDate && date === asOfDate;
-    var drill = !hubDay.channel;
-    var keyFor = function(col) { return (date + '|' + col).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); };
+    var keyFor = (function(dt) { return function(col) { return (dt + '|' + col).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }; })(date);
     var tdv = function(n, col) {
-      if (future) return '<td style="color:#c0c9d4">-</td>';
       if (!n) return '<td><span style="color:#c0c9d4">0</span></td>';
-      return drill ? '<td class="hub-click" title="タップすると内訳が出ます" onclick="hubToggle(\'day\', \'' + keyFor(col) + '\')">' + n + '</td>' : '<td>' + n + '</td>';
+      return drillAll ? '<td class="hub-click" title="タップすると内訳が出ます" onclick="hubToggle(\'day\', \'' + keyFor(col) + '\')">' + n + '</td>' : '<td>' + n + '</td>';
     };
-    rows += '<tr><td class="l" style="' + color + '">' + m + '/' + d + ' <span style="font-size:0.85em">(' + wdName[wd] + ')</span>' + (partial ? ' <span style="color:#b8860b;font-size:0.8em">途中</span>' : '') + '</td>' +
-      (future ? '<td style="color:#c0c9d4">-</td>' : (rec.total && drill
+    var dayHtml = '<tr><td class="l" style="' + color + '">' + m + '/' + d + ' <span style="font-size:0.85em">(' + wdName[wd] + ')</span>' + (partial ? ' <span style="color:#b8860b;font-size:0.8em">途中</span>' : '') + '</td>' +
+      (rec.total && drillAll
         ? '<td class="hub-click" title="タップすると内訳が出ます" style="font-weight:600;' + (isSpike(rec.total) ? 'background:#fff4d6;color:#8a5a00' : '') + '" onclick="hubToggle(\'day\', \'' + keyFor('__all__') + '\')">' + rec.total + '</td>'
-        : '<td style="font-weight:600;' + (isSpike(rec.total) ? 'background:#fff4d6;color:#8a5a00' : '') + '">' + (rec.total || '<span style="color:#c0c9d4">0</span>') + '</td>')) +
+        : '<td style="font-weight:600;' + (isSpike(rec.total) ? 'background:#fff4d6;color:#8a5a00' : '') + '">' + (rec.total || '<span style="color:#c0c9d4">0</span>') + '</td>') +
       r.cols.map(function(c) { return tdv(rec.by[c], c); }).join('') + '</tr>';
     if (hubOpen.day && hubOpen.day.indexOf(date + '|') === 0) {
       var openCol = hubOpen.day.slice(date.length + 1);
       var isAll = openCol === '__all__';
       var itemsD = hubBreakdown(hubInbox, hubDay.stage, isAll ? '' : openCol, function(x) { return x === date; });
-      rows += hubDetailRow(2 + r.cols.length, m + '/' + d + ' の ' + (isAll ? '' : openCol + ' の ') + HUB_STAGE_NAMES[hubDay.stage] + 'の内訳', itemsD);
+      dayHtml += hubDetailRow(2 + r.cols.length, m + '/' + d + ' の ' + (isAll ? '' : openCol + ' の ') + HUB_STAGE_NAMES[hubDay.stage] + 'の内訳', itemsD);
     }
-    if (wd === 0 || d === lastDay) flushWeek(d);
+    cur.days.push(dayHtml);
+    if (wd === 0 || d === shownLast) {
+      cur.end = wd === 0 ? d : Math.min(lastDay, d + ((7 - wd) % 7));   // 週の終わり(日曜)。データのない日も含めた、週の範囲
+      weeks.push(cur); cur = null;
+    }
   }
   var monthTotal = Object.keys(totals).reduce(function(a, k) { return a + totals[k].total; }, 0);
-  rows += rangeRow(m + '月 合計', ym + '-01', ym + '-' + pad(lastDay), { total: monthTotal, by: r.colTotals }, '#f4f8fc');
+  var rows = rangeRow(m + '月 合計', ym + '-01', ym + '-' + pad(lastDay), { total: monthTotal, by: r.colTotals }, '#f4f8fc');
+  for (var wi = weeks.length - 1; wi >= 0; wi--) {
+    var wk = weeks[wi];
+    rows += rangeRow('週計 ' + m + '/' + wk.start + ' 〜 ' + m + '/' + wk.end, ym + '-' + pad(wk.start), ym + '-' + pad(wk.end), wk.sum, '#eef4f9');
+    rows += wk.days.slice().reverse().join('');
+  }
+  if (!weeks.length) rows += '<tr><td class="l" colspan="' + (2 + r.cols.length) + '" style="color:#7c8ca0">この月には、まだデータがありません。</td></tr>';
 
-  box.innerHTML = '<p class="hub-sub">1人を、初回の流入経路を通った日（来場・成約は、その記録の日）で1回数えます。データは ' + esc(hubInbox.asOf || '-') + ' 時点までです。黄色は、ほかの日より目立って多い日です。</p>' +
+  box.innerHTML = '<p class="hub-sub">1人を、初回の流入経路を通った日（来場・成約は、その記録の日）で1回数えます。データは ' + esc(hubInbox.asOf || '-') + ' 時点までです。黄色は、ほかの日より目立って多い日です。新しい日が上です。</p>' +
     controls + '<div class="hub-scroll"><table class="hub-table"><thead>' + head + '</thead><tbody>' + rows + '</tbody></table></div>';
 }
 

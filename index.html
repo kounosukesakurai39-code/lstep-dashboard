@@ -2648,10 +2648,27 @@ function hubDrawDaily() {
 
   var head = '<tr><th class="l">日付</th><th>合計</th>' + r.cols.map(function(c) { return '<th>' + esc(c) + '</th>'; }).join('') + '</tr>';
   var rows = '', weekSum = { total: 0, by: {} }, weekStart = null;
+  // 週計・月合計の行。数字をタップすると、その期間の内訳が出る
+  var drillAll = !hubDay.channel;
+  var escK = function(k) { return k.replace(/\\/g, '\\\\').replace(/'/g, "\\'"); };
+  var rangeRow = function(label, from, to, sum, bg) {
+    var k = 'R' + from + '~' + to;
+    var cell = function(n, col) {
+      if (!n || !drillAll) return '<td>' + n + '</td>';
+      return '<td class="hub-click" title="タップすると内訳が出ます" onclick="hubToggle(\'day\', \'' + escK(k + '|' + col) + '\')">' + n + '</td>';
+    };
+    var html = '<tr style="font-weight:700;background:' + bg + '"><td class="l">' + label + '</td>' + cell(sum.total, '__all__') +
+      r.cols.map(function(c) { return cell(sum.by[c] || 0, c); }).join('') + '</tr>';
+    if (hubOpen.day && hubOpen.day.indexOf(k + '|') === 0) {
+      var col = hubOpen.day.slice(k.length + 1), isAll = col === '__all__';
+      var items = hubBreakdown(hubInbox, hubDay.stage, isAll ? '' : col, function(x) { return x >= from && x <= to; });
+      html += hubDetailRow(2 + r.cols.length, label.replace(/^週計 /, '') + ' の ' + (isAll ? '' : col + ' の ') + HUB_STAGE_NAMES[hubDay.stage] + 'の内訳', items);
+    }
+    return html;
+  };
   var flushWeek = function(endDay) {
     if (weekStart === null) return;
-    rows += '<tr style="font-weight:700;background:#eef4f9"><td class="l">週計 ' + m + '/' + weekStart + ' 〜 ' + m + '/' + endDay + '</td><td>' + weekSum.total + '</td>' +
-      r.cols.map(function(c) { return '<td>' + (weekSum.by[c] || 0) + '</td>'; }).join('') + '</tr>';
+    rows += rangeRow('週計 ' + m + '/' + weekStart + ' 〜 ' + m + '/' + endDay, ym + '-' + pad(weekStart), ym + '-' + pad(endDay), weekSum, '#eef4f9');
     weekSum = { total: 0, by: {} }; weekStart = null;
   };
   for (var d = 1; d <= lastDay; d++) {
@@ -2683,8 +2700,7 @@ function hubDrawDaily() {
     if (wd === 0 || d === lastDay) flushWeek(d);
   }
   var monthTotal = Object.keys(totals).reduce(function(a, k) { return a + totals[k].total; }, 0);
-  rows += '<tr style="font-weight:700;background:#f4f8fc"><td class="l">' + m + '月 合計</td><td>' + monthTotal + '</td>' +
-    r.cols.map(function(c) { return '<td>' + (r.colTotals[c] || 0) + '</td>'; }).join('') + '</tr>';
+  rows += rangeRow(m + '月 合計', ym + '-01', ym + '-' + pad(lastDay), { total: monthTotal, by: r.colTotals }, '#f4f8fc');
 
   box.innerHTML = '<p class="hub-sub">1人を、初回の流入経路を通った日（来場・成約は、その記録の日）で1回数えます。データは ' + esc(hubInbox.asOf || '-') + ' 時点までです。黄色は、ほかの日より目立って多い日です。</p>' +
     controls + '<div class="hub-scroll"><table class="hub-table"><thead>' + head + '</thead><tbody>' + rows + '</tbody></table></div>';

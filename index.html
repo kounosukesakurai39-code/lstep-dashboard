@@ -2820,8 +2820,17 @@ function renderHubTab(keepScroll) {
 
   var trendCard = '<div class="hub-card"><h3>流入経路別 推移表（LINE）</h3><div id="hubTrendBox"></div></div>' +
     '<div class="hub-card"><h3>日別 推移表（日付ごと）</h3><div id="hubDayBox"></div></div>';
+  // 自動更新が止まっているときの警告(中間システムのデータの時点が古い／自動取り込みが失敗した)
+  var warns = [];
+  var asOfMs = hubInbox.asOf ? new Date(hubInbox.asOf).getTime() : NaN;
+  if (!isNaN(asOfMs)) {
+    var hoursOld = (Date.now() - asOfMs) / 3600000;
+    if (hoursOld > 30) warns.push('中間システムのデータが、' + Math.floor(hoursOld / 24) + '日以上前の時点（' + esc(hubInbox.asOf) + '）のままです。中間システム側の毎日の自動更新が止まっているかもしれません。スプレッドシートのメニュー「中間システム」→「自動更新の状態を見る」を確認してください。');
+  }
+  if (hubInbox.lastAuto && hubInbox.lastAuto.ok === false) warns.push('毎朝の自動取り込みが、失敗しています（' + esc(hubInbox.lastAuto.error || '') + '）。');
+  var warnHtml = warns.length ? '<div class="hub-msg err" style="margin-bottom:14px">⚠ ' + warns.join('<br>⚠ ') + '</div>' : '';
   var scrollY = window.scrollY;
-  area.innerHTML = '<div class="rank-header" style="margin-bottom:12px"><h2 class="rank-h2">🔌 Lステップ表</h2></div>' + kpis + trendCard + connHtml + syncHtml + mapHtml + cmpHtml;
+  area.innerHTML = '<div class="rank-header" style="margin-bottom:12px"><h2 class="rank-h2">🔌 Lステップ表</h2></div>' + warnHtml + kpis + trendCard + connHtml + syncHtml + mapHtml + cmpHtml;
   hubDrawTrend();
   hubDrawDaily();
   if (keepScroll) window.scrollTo(0, scrollY);

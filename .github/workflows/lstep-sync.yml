@@ -1,10 +1,11 @@
 name: lstep-sync
 
-# 毎朝5時(日本時間)ごろ、Lステップ中間システムから受け取って、受け口を最新にする。
-# GitHub の都合で、数分〜1時間ほど遅れることがある。手動で動かすときは、Actions の「Run workflow」。
+# 毎朝5時台(日本時間)に、Lステップ中間システムから受け取って、受け口を最新にする。
+# 「ちょうど毎時0分」は GitHub が混み合って大きく遅れる(3時間以上のことも)ので、17分にずらしてある。
+# 手動で動かすときは、Actions の「Run workflow」。
 on:
   schedule:
-    - cron: '0 20 * * *'
+    - cron: '17 20 * * *'
   workflow_dispatch:
 
 concurrency:

@@ -2457,7 +2457,7 @@ function hubDrawCompare(box, controls, hasVis, hasCon) {
   }
 }
 
-function hubDrawTrend() {
+function hubDrawTrendInner() {
   var box = document.getElementById('hubTrendBox');
   if (!box) return;
   if (hubChart) { try { hubChart.destroy(); } catch (e) {} hubChart = null; }
@@ -2602,7 +2602,7 @@ function hubDailyCompute(inbox, ym, stage, channel) {
   return { days: days, cols: cols, colTotals: colTotals };
 }
 
-function hubDrawDaily() {
+function hubDrawDailyInner() {
   var box = document.getElementById('hubDayBox');
   if (!box) return;
   var allDates = [];
@@ -2714,6 +2714,19 @@ function hubDrawDaily() {
   box.innerHTML = '<p class="hub-sub">1人を、初回の流入経路を通った日（来場・成約は、その記録の日）で1回数えます。データは ' + esc(hubInbox.asOf || '-') + ' 時点までです。黄色は、ほかの日より目立って多い日です。新しい日が上です。</p>' +
     controls + '<div class="hub-scroll"><table class="hub-table"><thead>' + head + '</thead><tbody>' + rows + '</tbody></table></div>';
 }
+
+// 表を作り直しても、画面と表の中のスクロール位置を、そのままにする(数字をタップするたびに、上に戻らないように)
+function hubKeepScroll(boxId, draw) {
+  var box = document.getElementById(boxId);
+  var wraps = box ? [].slice.call(box.querySelectorAll('.hub-scroll')).map(function(w) { return [w.scrollTop, w.scrollLeft]; }) : [];
+  var x = window.scrollX, y = window.scrollY;
+  draw();
+  var nb = document.getElementById(boxId);
+  if (nb) [].slice.call(nb.querySelectorAll('.hub-scroll')).forEach(function(w, i) { if (wraps[i]) { w.scrollTop = wraps[i][0]; w.scrollLeft = wraps[i][1]; } });
+  window.scrollTo(x, y);
+}
+function hubDrawTrend() { hubKeepScroll('hubTrendBox', hubDrawTrendInner); }
+function hubDrawDaily() { hubKeepScroll('hubDayBox', hubDrawDailyInner); }
 
 function renderHubTab(keepScroll) {
   var area = document.getElementById('hubArea');

@@ -260,6 +260,36 @@
   .hub-scroll .hub-table tbody tr { background: #fff; }
   .hub-scroll .hub-table td.l:first-child, .hub-scroll .hub-table th.l:first-child { position: sticky; left: 0; z-index: 1; background: inherit; }
   .hub-scroll .hub-table thead th.l:first-child { z-index: 4; background: #fafbfd; }
+  .hub-sumbtn { border: 1px solid #b9d3ea; background: #fff; color: #14548a; border-radius: 999px; padding: 3px 12px; font: inherit; font-size: 0.82em; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .hub-sumbtn:hover { background: #e8f1f9; }
+  .hub-sumbtn.on { background: #14548a; color: #fff; border-color: #14548a; }
+  .hub-summary td { background: #f4f8fc; padding: 14px 16px !important; text-align: left !important; white-space: normal !important; font-weight: 400; }
+  .hub-sumwrap { position: sticky; left: 0; width: calc(100vw - 150px); max-width: 1040px; }
+  .hub-sumtitle { font-size: 1.02em; font-weight: 700; color: #163a5c; margin-bottom: 10px; }
+  .hub-sumgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; }
+  .hub-sumcard { background: #fff; border: 1px solid #e1e9f2; border-radius: 12px; padding: 14px 16px; }
+  .hub-sumcard h4 { font-size: 0.82em; color: #7c8ca0; font-weight: 600; margin-bottom: 8px; }
+  .hub-big { font-size: 2.1em; font-weight: 700; color: #14548a; line-height: 1.1; }
+  .hub-big small { font-size: 0.4em; font-weight: 500; color: #7c8ca0; margin-left: 4px; }
+  .hub-delta { font-size: 0.9em; font-weight: 600; margin-top: 6px; }
+  .hub-meta { font-size: 0.82em; color: #55677e; margin-top: 4px; line-height: 1.6; }
+  .hub-barrow { display: grid; grid-template-columns: minmax(96px, 1.7fr) 1.1fr auto; gap: 8px; align-items: center; font-size: 0.86em; margin: 6px 0; }
+  .hub-barrow .nm { color: #1f2b3d; line-height: 1.3; word-break: break-all; }
+  .hub-barrow .bar { height: 10px; background: #edf2f7; border-radius: 6px; overflow: hidden; }
+  .hub-barrow .bar > span { display: block; height: 100%; background: #2f7f9b; border-radius: 6px; }
+  .hub-barrow .val { color: #163a5c; font-weight: 600; white-space: nowrap; }
+  .hub-barrow .val small { color: #7c8ca0; font-weight: 400; margin-left: 4px; }
+  .hub-cols { display: flex; align-items: flex-end; gap: 6px; height: 110px; }
+  .hub-cols .c { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; min-width: 26px; }
+  .hub-cols .c .v { font-size: 0.78em; color: #163a5c; font-weight: 600; margin-bottom: 2px; }
+  .hub-cols .c .b { width: 70%; background: #8fb9cf; border-radius: 4px 4px 0 0; min-height: 2px; }
+  .hub-cols .c.max .b { background: #d98a22; }
+  .hub-cols .c .d { font-size: 0.72em; color: #7c8ca0; margin-top: 4px; white-space: nowrap; }
+  .hub-flow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .hub-flow .st { text-align: center; }
+  .hub-flow .st b { display: block; font-size: 1.5em; color: #14548a; }
+  .hub-flow .st span { font-size: 0.78em; color: #7c8ca0; }
+  .hub-flow .ar { color: #7c8ca0; font-size: 0.82em; text-align: center; }
   .hub-click { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
   .hub-click:hover { background: #eef4f9; }
   .hub-detail td { background: #f8fbfe; text-align: left !important; white-space: normal !important; padding: 10px 14px !important; font-size: 0.92em; color: #45566b; }
@@ -2318,11 +2348,109 @@ function hubApplyToSnapshots() {
 
 
 // ---- 流入経路別 推移表(LINE登録 → 来場 → 成約)
-var hubOpen = { day: null, trend: null };
+var hubOpen = { day: null, trend: null, sum: null };
 
 function hubToggle(which, key) {
   hubOpen[which] = (hubOpen[which] === key ? null : key);
-  if (which === 'day') hubDrawDaily(); else hubDrawTrend();
+  if (which === 'day' || which === 'sum') hubDrawDaily(); else hubDrawTrend();
+}
+
+function hubAddDays(dateStr, n) {
+  var p = dateStr.split('-').map(function(x) { return parseInt(x, 10); });
+  return new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)).toISOString().slice(0, 10);
+}
+
+// 指定した期間(from〜to)・段階・(あれば)流入経路での集計: 合計、大分類別、経路別、日別
+function hubRangeSummary(inbox, stage, from, to, channel) {
+  var res = { total: 0, byCh: {}, byRoute: {}, byDay: {} };
+  var put = function(date, raw) {
+    if (date < from || date > to) return;
+    var ch = raw === null ? '未入力' : hubChannelOf(inbox, raw);
+    if (channel && ch !== channel) return;
+    res.total++;
+    res.byCh[ch] = (res.byCh[ch] || 0) + 1;
+    var rk = raw === null ? '\u0000none' : raw;
+    res.byRoute[rk] = (res.byRoute[rk] || 0) + 1;
+    res.byDay[date] = (res.byDay[date] || 0) + 1;
+  };
+  if (stage === 'reg') {
+    ['first', 'rt'].forEach(function(k) { var st = inbox[k] || {}; Object.keys(st).forEach(function(h) { put(st[h][0], inbox.raws[st[h][1]]); }); });
+  } else {
+    var store = inbox[stage] || {};
+    Object.keys(store).forEach(function(h) { var r = hubUidRoute(inbox, h); put(store[h], r ? r.raw : null); });
+  }
+  return res;
+}
+
+// 週・月の「集計」パネル(見やすいまとめ)
+function hubSummaryHtml(from, to, kind, stage, channel, asOfDate) {
+  var stageName = HUB_STAGE_NAMES[stage];
+  var cur = hubRangeSummary(hubInbox, stage, from, to, channel);
+  var span = kind === 'month' ? null : 7;
+  var prevFrom, prevTo;
+  if (kind === 'month') {
+    var py = parseInt(from.slice(0, 4), 10), pm = parseInt(from.slice(5, 7), 10) - 1;
+    if (pm === 0) { pm = 12; py--; }
+    prevFrom = py + '-' + (pm < 10 ? '0' : '') + pm + '-01';
+    prevTo = hubAddDays(from, -1);
+  } else { prevFrom = hubAddDays(from, -7); prevTo = hubAddDays(from, -1); }
+  var prev = hubRangeSummary(hubInbox, stage, prevFrom, prevTo, channel);
+
+  var days = [], dd = from;
+  while (dd <= to) { if (!asOfDate || dd <= asOfDate) days.push(dd); dd = hubAddDays(dd, 1); }
+  var n = days.length || 1;
+  var maxDay = null;
+  days.forEach(function(x) { if ((cur.byDay[x] || 0) > (maxDay ? cur.byDay[maxDay] : -1)) maxDay = x; });
+  var md = function(x) { var p = x.split('-'); return parseInt(p[1], 10) + '/' + parseInt(p[2], 10); };
+  var wdn = '日月火水木金土';
+
+  var diff = cur.total - prev.total;
+  var diffColor = diff > 0 ? '#1f8a4c' : (diff < 0 ? '#b3263e' : '#7c8ca0');
+  var diffTxt = (diff > 0 ? '+' : '') + diff + '人' + (prev.total ? '（' + (diff >= 0 ? '+' : '') + (Math.round(diff / prev.total * 1000) / 10) + '%）' : '');
+  var cardTotal = '<div class="hub-sumcard"><h4>' + stageName + ' 合計</h4><div class="hub-big">' + cur.total.toLocaleString('ja-JP') + '<small>人</small></div>' +
+    '<div class="hub-delta" style="color:' + diffColor + '">' + (kind === 'month' ? '前の月' : '前の週') + 'より ' + diffTxt + '</div>' +
+    '<div class="hub-meta">' + (kind === 'month' ? '前の月' : '前の週') + '：' + prev.total + '人<br>1日あたり：' + (Math.round(cur.total / n * 10) / 10) + '人（' + days.length + '日ぶん）' +
+    (maxDay && cur.byDay[maxDay] ? '<br>いちばん多い日：' + md(maxDay) + '（' + cur.byDay[maxDay] + '人）' : '') + '</div></div>';
+
+  var bar = function(label, v, max, total) {
+    var w = max ? Math.max(2, Math.round(v / max * 100)) : 0;
+    return '<div class="hub-barrow"><div class="nm" title="' + esc(label) + '">' + esc(label) + '</div><div class="bar"><span style="width:' + w + '%"></span></div>' +
+      '<div class="val">' + v + '人<small>' + (total ? Math.round(v / total * 100) : 0) + '%</small></div></div>';
+  };
+  var chOrd = function(x) { var i = HUB_CHANNEL_ORDER.indexOf(x); return x === '未入力' ? 1000 : (i < 0 ? 500 : i); };
+  var chRows = Object.keys(cur.byCh).sort(function(a, b) { return cur.byCh[b] - cur.byCh[a] || chOrd(a) - chOrd(b); });
+  var chMax = chRows.length ? cur.byCh[chRows[0]] : 0;
+  var cardCh = channel ? '' : '<div class="hub-sumcard"><h4>流入経路ごと</h4>' + (chRows.length ? chRows.map(function(c) { return bar(c, cur.byCh[c], chMax, cur.total); }).join('') : '<div class="hub-meta">この期間は、まだありません。</div>') + '</div>';
+
+  var routes = Object.keys(cur.byRoute).sort(function(a, b) { return cur.byRoute[b] - cur.byRoute[a]; });
+  var top = routes.slice(0, 5), rMax = top.length ? cur.byRoute[top[0]] : 0;
+  var cardRoute = '<div class="hub-sumcard"><h4>よく入ってきた経路 TOP' + Math.min(5, routes.length || 5) + '</h4>' +
+    (top.length ? top.map(function(k) { return bar(hubRouteLabel(hubInbox, k === '\u0000none' ? null : k), cur.byRoute[k], rMax, cur.total); }).join('') : '<div class="hub-meta">この期間は、まだありません。</div>') +
+    (routes.length > 5 ? '<div class="hub-meta">ほか ' + (routes.length - 5) + ' 経路</div>' : '') + '</div>';
+
+  var dMax = 0; days.forEach(function(x) { dMax = Math.max(dMax, cur.byDay[x] || 0); });
+  var dayCols = kind === 'month' ? days : days;
+  var cardDays = '<div class="hub-sumcard"><h4>日ごとの' + stageName + '</h4><div class="hub-cols" style="' + (dayCols.length > 14 ? 'gap:2px' : '') + '">' +
+    dayCols.map(function(x) {
+      var v = cur.byDay[x] || 0, h = dMax ? Math.round(v / dMax * 70) : 0, wdx = new Date(parseInt(x.slice(0, 4), 10), parseInt(x.slice(5, 7), 10) - 1, parseInt(x.slice(8, 10), 10)).getDay();
+      return '<div class="c' + (x === maxDay && v ? ' max' : '') + '"><div class="v">' + (v || '') + '</div><div class="b" style="height:' + h + 'px"></div><div class="d">' + (dayCols.length > 14 ? parseInt(x.slice(8, 10), 10) : md(x) + '<br>(' + wdn[wdx] + ')') + '</div></div>';
+    }).join('') + '</div></div>';
+
+  var hasVis = Object.keys(hubInbox.vis || {}).length > 0, hasCon = Object.keys(hubInbox.con || {}).length > 0;
+  var flow = '';
+  if (hasVis || hasCon) {
+    var reg = hubRangeSummary(hubInbox, 'reg', from, to, channel).total;
+    var vis = hasVis ? hubRangeSummary(hubInbox, 'vis', from, to, channel).total : null;
+    var con = hasCon ? hubRangeSummary(hubInbox, 'con', from, to, channel).total : null;
+    var pc = function(a, b) { return b ? Math.round(a / b * 1000) / 10 + '%' : '-'; };
+    flow = '<div class="hub-sumcard"><h4>流れ（この期間に、それぞれ数えた人数）</h4><div class="hub-flow">' +
+      '<div class="st"><b>' + reg + '</b><span>LINE登録</span></div>' +
+      (hasVis ? '<div class="ar">→<br>' + pc(vis, reg) + '</div><div class="st"><b>' + vis + '</b><span>来場</span></div>' : '') +
+      (hasCon ? '<div class="ar">→<br>' + pc(con, vis) + '</div><div class="st"><b>' + con + '</b><span>成約</span></div>' : '') +
+      '</div><div class="hub-meta">登録した日・来場した日・成約した日を、それぞれこの期間で数えています。同じ人の流れとは限りません。</div></div>';
+  }
+  var title = (kind === 'month' ? md(from) + '〜' + md(to) + '（' + parseInt(from.slice(5, 7), 10) + '月）' : md(from) + '〜' + md(to)) + ' の集計' + (channel ? '（' + esc(channel) + '）' : '');
+  return '<div class="hub-sumwrap"><div class="hub-sumtitle">📊 ' + title + '</div><div class="hub-sumgrid">' + cardTotal + cardCh + cardRoute + cardDays + flow + '</div></div>';
 }
 
 // Lステップの経路名だけでは、どのアカウントか分かりにくいものの表示名(Navi側の数字と突き合わせて決めたもの)
@@ -2650,18 +2778,24 @@ function hubDrawDailyInner() {
   // 新しい日が上。週計・月合計は、その期間の見出しとして、いちばん上に置く
   var drillAll = !hubDay.channel;
   var escK = function(k) { return k.replace(/\\/g, '\\\\').replace(/'/g, "\\'"); };
-  var rangeRow = function(label, from, to, sum, bg) {
+  var rangeRow = function(label, from, to, sum, bg, kind) {
     var k = 'R' + from + '~' + to;
+    var sumOpen = hubOpen.sum === k;
+    var labelCell = '<td class="l"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span>' + label + '</span>' +
+      '<button class="hub-sumbtn' + (sumOpen ? ' on' : '') + '" title="この' + (kind === 'month' ? '月' : '週') + 'のまとめを開く" onclick="hubToggle(\'sum\', \'' + escK(k) + '\')">' + (sumOpen ? '集計 ▲' : '集計 ▼') + '</button></div></td>';
     var cell = function(n, col) {
       if (!n || !drillAll) return '<td>' + n + '</td>';
       return '<td class="hub-click" title="タップすると内訳が出ます" onclick="hubToggle(\'day\', \'' + escK(k + '|' + col) + '\')">' + n + '</td>';
     };
-    var html = '<tr style="font-weight:700;background:' + bg + '"><td class="l">' + label + '</td>' + cell(sum.total, '__all__') +
+    var html = '<tr style="font-weight:700;background:' + bg + '">' + labelCell + cell(sum.total, '__all__') +
       r.cols.map(function(c) { return cell(sum.by[c] || 0, c); }).join('') + '</tr>';
     if (hubOpen.day && hubOpen.day.indexOf(k + '|') === 0) {
       var col = hubOpen.day.slice(k.length + 1), isAll = col === '__all__';
       var items = hubBreakdown(hubInbox, hubDay.stage, isAll ? '' : col, function(x) { return x >= from && x <= to; });
       html += hubDetailRow(2 + r.cols.length, label.replace(/^週計 /, '') + ' の ' + (isAll ? '' : col + ' の ') + HUB_STAGE_NAMES[hubDay.stage] + 'の内訳', items);
+    }
+    if (sumOpen) {
+      html += '<tr class="hub-summary"><td colspan="' + (2 + r.cols.length) + '">' + hubSummaryHtml(from, to, kind, hubDay.stage, hubDay.channel, asOfDate) + '</td></tr>';
     }
     return html;
   };
@@ -2703,10 +2837,10 @@ function hubDrawDailyInner() {
     }
   }
   var monthTotal = Object.keys(totals).reduce(function(a, k) { return a + totals[k].total; }, 0);
-  var rows = rangeRow(m + '月 合計', ym + '-01', ym + '-' + pad(lastDay), { total: monthTotal, by: r.colTotals }, '#f4f8fc');
+  var rows = rangeRow(m + '月 合計', ym + '-01', ym + '-' + pad(lastDay), { total: monthTotal, by: r.colTotals }, '#f4f8fc', 'month');
   for (var wi = weeks.length - 1; wi >= 0; wi--) {
     var wk = weeks[wi];
-    rows += rangeRow('週計 ' + m + '/' + wk.start + ' 〜 ' + m + '/' + wk.end, ym + '-' + pad(wk.start), ym + '-' + pad(wk.end), wk.sum, '#eef4f9');
+    rows += rangeRow('週計 ' + m + '/' + wk.start + ' 〜 ' + m + '/' + wk.end, ym + '-' + pad(wk.start), ym + '-' + pad(wk.end), wk.sum, '#eef4f9', 'week');
     rows += wk.days.slice().reverse().join('');
   }
   if (!weeks.length) rows += '<tr><td class="l" colspan="' + (2 + r.cols.length) + '" style="color:#7c8ca0">この月には、まだデータがありません。</td></tr>';

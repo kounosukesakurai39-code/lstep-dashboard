@@ -1,0 +1,26 @@
+name: monthly-tagstats
+
+# 手動で動かす: 中間システムの tagstats で、月ごとの人数(タグの累計)を数えて、受け口(app_data id=3)に保存する。
+# Actions の「Run workflow」で、数える月(例 2025-01:2026-10)を指定できる。人数だけで、名前や uid は扱わない。
+on:
+  workflow_dispatch:
+    inputs:
+      months:
+        description: '数える月(開始:終了)'
+        default: '2025-01:2026-10'
+
+jobs:
+  tagstats:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: 月ごとの人数を数える
+        run: node scripts/monthly-from-hub.mjs
+        env:
+          HUB_URL: ${{ secrets.HUB_URL }}
+          HUB_KEY: ${{ secrets.HUB_KEY }}
+          MONTHS: ${{ github.event.inputs.months }}

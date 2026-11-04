@@ -1,0 +1,204 @@
+{
+ "cats": [
+  {
+   "business": "Navi",
+   "group": "SNS",
+   "category": "公式SNS - Navi   X（コウノスケ）",
+   "tags": [
+    "10.naviX（Twitter）_流入経路"
+   ]
+  },
+  {
+   "business": "Navi",
+   "group": "SNS",
+   "category": "公式SNS - Navi 　instagram（コウノスケ）",
+   "tags": [
+    "1. naviInstagram_流入経路"
+   ]
+  },
+  {
+   "business": "Navi",
+   "group": "SNS",
+   "category": "公式SNS - Navi  YouTube（松永）",
+   "tags": [
+    "11.韓国美容整形naviYouTube(松永)"
+   ]
+  },
+  {
+   "business": "Navi",
+   "group": "SNS",
+   "category": "おしお - X",
+   "tags": [
+    "村上「おしお」X"
+   ]
+  },
+  {
+   "business": "Navi",
+   "group": "SNS",
+   "category": "よしえオンニ - X",
+   "tags": [
+    "梅村X(プロフィール)_流入経路"
+   ]
+  },
+  {
+   "business": "Navi",
+   "group": "SNS",
+   "category": "よしえオンニ - スレッズ（コウノスケ）",
+   "tags": [
+    "梅村Threads_流入経路"
+   ]
+  },
+  {
+   "business": "Navi",
+   "group": "SNS",
+   "category": "Emma - X",
+   "tags": [
+    "Emma様紹介_流入経路"
+   ]
+  },
+  {
+   "business": "Navi",
+   "group": "SNS",
+   "category": "info - note",
+   "tags": [
+    "info note_流入経路"
+   ]
+  },
+  {
+   "business": "Navi",
+   "group": "SNS",
+   "category": "info - X",
+   "tags": [
+    "000.infoX(Twitter)_流入経路"
+   ]
+  },
+  {
+   "business": "Navi",
+   "group": "SNS",
+   "category": "よしえオンニ - X（原川）",
+   "tags": [
+    "よしえオンニX用(原川)_流入経路"
+   ]
+  },
+  {
+   "business": "Navi",
+   "group": "SNS",
+   "category": "よしえオンニ - 公式ブログ",
+   "tags": [
+    "HP_よしえオンニブログ流入経路"
+   ]
+  },
+  {
+   "business": "Navi",
+   "group": "SNS",
+   "category": "よしえオンニ - Instagram（原川）",
+   "tags": [
+    "よしえオンニInstagram_流入経路"
+   ]
+  },
+  {
+   "business": "Navi",
+   "group": "SNS",
+   "category": "よしえオンニ - TikTok（放置）",
+   "tags": [
+    "よしえオンニTikTok_流入経路"
+   ]
+  },
+  {
+   "business": "Navi",
+   "group": "SNS",
+   "category": "よしえオンニ - youtube（原川）",
+   "tags": [
+    "よしえオンニYouTubeShort_流入経路"
+   ]
+  },
+  {
+   "business": "Navi",
+   "group": "SNS",
+   "category": "よしえオンニ - note",
+   "tags": [
+    "ナビnote_流入経路"
+   ]
+  },
+  {
+   "business": "Navi",
+   "group": "オーガニック",
+   "category": "オーガニック",
+   "tags": [
+    "オーガニック_流入経路(大)"
+   ]
+  },
+  {
+   "business": "Navi",
+   "group": "オーガニック",
+   "category": "メインサイト(ナビ本体トップページ)用_流入経路",
+   "tags": [
+    "メインサイト(ナビ本体トップページ)用_流入経路"
+   ]
+  },
+  {
+   "business": "Navi",
+   "group": null,
+   "category": "Lステップ導入前",
+   "tags": [
+    "Lステップ導入前_流入経路(大)"
+   ]
+  },
+  {
+   "business": "Navi",
+   "group": null,
+   "category": "DA広告",
+   "tags": [
+    "DA LP Google広告試し用_流入経路"
+   ]
+  },
+  {
+   "business": "Navi",
+   "group": null,
+   "category": "ドリーム広告",
+   "tags": [
+    "ドリームLP Google広告用_流入経路"
+   ]
+  },
+  {
+   "business": "Navi",
+   "group": null,
+   "category": "ベリーグッド広告",
+   "tags": [
+    "ベリーグッド LP Google広告用_流入経路"
+   ]
+  },
+  {
+   "business": "Navi",
+   "group": null,
+   "category": "現代美学広告",
+   "tags": [
+    "現代美学大阪Google広告用LP_流入経路"
+   ]
+  }
+ ],
+ "metrics": {
+  "カウンセ申込済": [
+   "カウンセリング会申込済"
+  ],
+  "来場": [
+   "カウンセリング会来場済"
+  ],
+  "成約": [
+   "ベリーグッド美容外科カウンセリング会にて成約",
+   "現代美学整形外科カウンセリング会にて成約",
+   "345整形外科カウンセリング会にて成約",
+   "NOTE美容外科カウンセリング会にて成約",
+   "ブラウン整形外科カウンセリング会にて成約",
+   "ドリーム整形外科カウンセリング会にて成約",
+   "DA美容外科カウンセリング会にて成約",
+   "マーブル美容整形外科カウンセリング会にて成約",
+   "NANA美容外科カウンセリング会にて成約",
+   "グランド整形外科カウンセリング会にて成約",
+   "ワンダフル整形外科カウンセリング会にて成約"
+  ],
+  "渡韓済": [
+   "渡韓済"
+  ]
+ }
+}

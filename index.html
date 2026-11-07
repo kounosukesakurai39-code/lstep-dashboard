@@ -1338,15 +1338,26 @@ function renderCharts() {
     byMonth[m] = (byMonth[m] || 0) + 1;
   });
   var months = Object.keys(byMonth).sort();
+  // 登録が0件の月も、0として並べる（抜けると、前後がつながって、その月が無いように見えるため）
+  if (months.length > 1) {
+    var filled = [], cur = months[0], last = months[months.length - 1];
+    while (cur <= last && filled.length < 600) {
+      filled.push(cur);
+      var py = parseInt(cur.slice(0, 4), 10), pm = parseInt(cur.slice(5, 7), 10) + 1;
+      if (pm > 12) { py++; pm = 1; }
+      cur = py + '-' + (pm < 10 ? '0' : '') + pm;
+    }
+    months = filled;
+  }
 
   if (lineChartInstance) lineChartInstance.destroy();
   lineChartInstance = new Chart(document.getElementById('lineChart'), {
     type: 'line',
     data: {
       labels: months,
-      datasets: [{ label: 'LINE登録数', data: months.map(function(m) { return byMonth[m]; }), borderColor: '#60c0f0', backgroundColor: '#60c0f033', tension: 0.3, fill: true }]
+      datasets: [{ label: 'LINE登録数', data: months.map(function(m) { return byMonth[m] || 0; }), borderColor: '#60c0f0', backgroundColor: '#60c0f033', tension: 0.3, fill: true }]
     },
-    options: { plugins: { legend: { labels: { color: '#2a3a50' } } }, scales: { x: { ticks: { color: '#7088a0' }, grid: { color: '#eef0f4' } }, y: { ticks: { color: '#7088a0' }, grid: { color: '#eef0f4' }, beginAtZero: true } } }
+    options: { plugins: { legend: { labels: { color: '#2a3a50' } } }, scales: { x: { ticks: { color: '#7088a0', autoSkip: false, maxRotation: 90, minRotation: 45, font: { size: 10 } }, grid: { color: '#eef0f4' } }, y: { ticks: { color: '#7088a0' }, grid: { color: '#eef0f4' }, beginAtZero: true } } }
   });
 
   // 状態別円グラフ

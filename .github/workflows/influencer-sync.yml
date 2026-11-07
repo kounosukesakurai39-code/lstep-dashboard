@@ -1,0 +1,36 @@
+name: influencer-sync
+
+# インフルエンサータブの記録を、Lステップ(中間システムの friendlist)と照合・更新する。手動で動かす。
+#   check … 照合だけ(書き込まない)。数字だけの報告を、受け口(app_data id=4)に保存する。
+#   apply … 新しい登録者を追加し、Lステップで対応マークが変わった人の状態を更新する(削除はしない。変更の記録は id=5)。
+# つなぎ目(記録の lineId と友だちID)の一致が8割未満のときは、書き込まずに止まる。
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'check=照合だけ / apply=書き込む'
+        type: choice
+        default: check
+        options:
+          - check
+          - apply
+
+concurrency:
+  group: influencer-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: 照合・更新
+        run: node scripts/influencer-sync.mjs
+        env:
+          HUB_URL: ${{ secrets.HUB_URL }}
+          HUB_KEY: ${{ secrets.HUB_KEY }}
+          MODE: ${{ github.event.inputs.mode }}

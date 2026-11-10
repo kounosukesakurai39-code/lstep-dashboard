@@ -2,12 +2,14 @@
 // GitHub Actions(.github/workflows/influencer-sync.yml)から実行する。
 //   MODE=check  照合だけ(書き込まない)。数字だけの報告を、受け口(id=4)に保存する。
 //   MODE=apply  新しい登録者を追加し、Lステップで対応マークが変わった人の状態を更新する。削除はしない。
-// 環境変数: HUB_URL / HUB_KEY(Secrets。末端表の「許可友だち項目」に tags, name が必要) / MODE
+// 環境変数: HUB_URL / HUB_KEY(Secrets。末端表の「許可友だち項目」に tags, name, full_name が必要) / ALIGN_STATUS / MODE
 // テスト用: MAIN_FILE=ファイル(id=1 の代わり) / OUT_FILE=ファイル(報告・変更記録の保存先の代わり)
 //
 // 決まり:
 //  - 記録の lineId と、Lステップの友だちID(id)を、つなぎ目にする。
 //  - 状態は、Lステップの対応マークが「前回(lsMark)から変わったとき」だけ更新する。手で直した状態は、Lステップが変わらない限り、上書きしない。
+//    ただし ALIGN_STATUS=true のときは、一度だけ、すべての状態をLステップの対応マークにそろえる(変更前は id=5 に残る)。
+//  - 名前は、新しい登録者は「本名(full_name)があれば本名、なければ表示名」。既存の記録は、名前が空・「（名前なし）」・Lステップの表示名のままのときだけ、本名に置き換える(手で直した名前は触らない)。
 //  - 名前・売上・手術などの手入力の項目は、既存の記録では変えない。
 //  - つなぎ目が合わない(一致が8割未満)ときは、重複を作らないように、書き込まずに止まる。
 
@@ -18,6 +20,7 @@ const SB_KEY = process.env.SB_KEY || 'sb_publishable_wAsepmixI4NC16C59B6kbA_Rmxz
 const HUB_URL = (process.env.HUB_URL || '').trim();
 const HUB_KEY = (process.env.HUB_KEY || '').trim();
 const MODE = (process.env.MODE || 'check').trim();
+const ALIGN = ['1', 'true', 'yes'].includes(String(process.env.ALIGN_STATUS || '').trim().toLowerCase());   // true: 状態を、Lステップの対応マークに一度そろえる
 const MAIN_FILE = process.env.MAIN_FILE || '';
 const OUT_FILE = process.env.OUT_FILE || '';
 const MIN_MATCH = 0.8;
@@ -48,7 +51,7 @@ async function hubPost(spec, offset) {
   const t = await r.text();
   let j; try { j = JSON.parse(t); } catch (e) { throw new Error('中間システムの答えが読めません: ' + t.slice(0, 120)); }
   if (!j.ok) throw new Error('中間システムがエラーを返しました: ' + j.error +
-    (j.error === 'forbidden' ? '(末端表の「許可友だち項目」に tags と name を入れてください)' : j.error === 'unauthorized' ? '(合言葉が違う、または末端が停止になっています)' : ''));
+    (j.error === 'forbidden' ? '(末端表の「許可友だち項目」に tags と name と full_name を入れてください)' : j.error === 'unauthorized' ? '(合言葉が違う、または末端が停止になっています)' : ''));
   return j;
 }
 async function fetchFriends(tags) {
@@ -75,6 +78,9 @@ function sourceOf(f, tagToSource) {
 const effMark = f => f.blocked ? 'ブロック' : (f.mark || '');
 const day = s => String(s || '').slice(0, 10);
 const norm = s => String(s || '').replace(/[\s　]/g, '');
+// 既存の記録の名前を本名に置き換えてよいか(名前が空・「（名前なし）」・Lステップの表示名のまま、のとき)
+const autoName = (r, f) => { const n = norm(r.name); return !n || n === norm('（名前なし）') || (!!f.name && n === norm(f.name)); };
+const wantRealName = (r, f) => !!(f.full_name && norm(f.full_name) !== norm(r.name) && autoName(r, f));
 
 async function main() {
   if (!HUB_URL || !HUB_KEY) throw new Error('HUB_URL と HUB_KEY が設定されていません(GitHub の Settings → Secrets)');
@@ -92,7 +98,7 @@ async function main() {
   // ---- 照合の報告(数字だけ)
   const rep = { v: 1, at: new Date().toISOString(), mode: MODE, asOf, friends: friends.length, hasNames: friends.some(f => 'name' in f),
     recordsInScope: recs.length, matched: 0, unmatchedRecords: 0, newFriends: 0, bySource: {}, statusSame: 0, statusDiff: 0, statusDiffTop: {},
-    sourceMismatch: 0, nameSame: 0, nameDiff: 0, namesChecked: 0, regSame: 0, regDiff: 0, unknownMarks: {} };
+    sourceMismatch: 0, nameSame: 0, nameDiff: 0, namesChecked: 0, regSame: 0, regDiff: 0, unknownMarks: {}, hasFullNames: friends.some(f => 'full_name' in f), fullNameFilled: friends.filter(f => f.full_name).length, nameWillChange: 0 };
   Object.keys(map.sources).forEach(s => rep.bySource[s] = { records: 0, matched: 0, friends: 0, newFriends: 0 });
   recs.forEach(r => rep.bySource[r.source].records++);
   const diffTop = {};
@@ -109,6 +115,7 @@ async function main() {
     if (m === r.status) rep.statusSame++; else { rep.statusDiff++; const k = r.status + ' → ' + (m || '(なし)'); diffTop[k] = (diffTop[k] || 0) + 1; }
     if ('name' in f && f.name) { rep.namesChecked++; if (norm(f.name) === norm(r.name)) rep.nameSame++; else rep.nameDiff++; }
     if (r.registeredAt) { if (day(f.created_at) === r.registeredAt) rep.regSame++; else rep.regDiff++; }
+    if (wantRealName(r, f)) rep.nameWillChange++;
   });
   rep.unmatchedRecords = recs.length - rep.matched;
   rep.matchRate = recs.length ? +(rep.matched / recs.length).toFixed(3) : 0;
@@ -131,7 +138,7 @@ async function main() {
     const m = effMark(f);
     const r = freshById.get(String(f.id));
     if (!r) {
-      const rec = { id: nextId++, name: f.name || '（名前なし）', lineId: String(f.id), source: src,
+      const rec = { id: nextId++, name: f.full_name || f.name || '（名前なし）', lineId: String(f.id), source: src,
         status: stat.indexOf(m) >= 0 ? m : '【未】アンケ', updatedAt: now, lsMark: m };
       if (f.created_at) rec.registeredAt = day(f.created_at);
       fresh.records.push(rec); log.added.push(rec.id);
@@ -142,6 +149,8 @@ async function main() {
     let ch = false;
     if (r.lsMark === undefined) { r.lsMark = m; ch = true; }                       // 初回: 比べる基準だけ記録。状態は変えない
     else if (m !== r.lsMark) { if (stat.indexOf(m) >= 0) r.status = m; r.lsMark = m; r.updatedAt = now; ch = true; }
+    if (ALIGN && stat.indexOf(m) >= 0 && r.status !== m) { r.status = m; r.lsMark = m; r.updatedAt = now; ch = true; }   // 一度だけ、状態をLステップにそろえる
+    if (wantRealName(r, f)) { r.name = f.full_name; r.updatedAt = r.updatedAt || now; before.nameWasAuto = true; ch = true; }   // 変更前の名前は、記録に残さない(個人情報)
     if (!r.registeredAt && f.created_at) { r.registeredAt = day(f.created_at); ch = true; }
     if (ch) log.changed.push({ id: r.id, before });
   });

@@ -14,6 +14,10 @@ on:
         options:
           - check
           - apply
+      align_status:
+        description: '状態を、Lステップの対応マークに一度そろえる(apply のときだけ有効。手で直した状態も上書きされる)'
+        type: boolean
+        default: false
 
 concurrency:
   group: influencer-sync
@@ -34,3 +38,4 @@ jobs:
           HUB_URL: ${{ secrets.HUB_URL }}
           HUB_KEY: ${{ secrets.HUB_KEY }}
           MODE: ${{ github.event.inputs.mode }}
+          ALIGN_STATUS: ${{ github.event.inputs.align_status }}

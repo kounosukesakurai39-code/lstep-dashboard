@@ -146,6 +146,8 @@ async function main() {
     if (ch) log.changed.push({ id: r.id, before });
   });
   fresh.nextId = nextId;
+  if (!Array.isArray(fresh.sources)) fresh.sources = [];
+  Object.keys(map.sources).forEach(s => { if (fresh.sources.indexOf(s) < 0) fresh.sources.push(s); });   // 新しい経路はプルダウンに出す
   await saveRow(5, log);                                 // 戻せるように、変更の記録を先に保存(名前は入れない)
   await saveMain(fresh);
   console.log('書き込みました: 追加 ' + log.added.length + '人 / 更新 ' + log.changed.length + '人(変更の記録は受け口 id=5)');
